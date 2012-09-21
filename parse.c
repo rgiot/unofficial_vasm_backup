@@ -596,6 +596,10 @@ static void start_repeat(char *rept_end)
     sprintf(buf,"REPEAT:%s:line %d",cur_src->name,cur_src->line);
     src = new_source(mystrdup(buf),rept_start,rept_end-rept_start);
     src->repeat = (unsigned long)rept_cnt;
+#ifdef REPTNSYM
+    src->reptn = 0;
+    set_internal_abs(REPTNSYM,0);
+#endif
 
     if (cur_src->num_params > 0) {
       /* repetition in a macro: get parameters */
@@ -683,6 +687,9 @@ char *read_next_line(void)
       if (--cur_src->repeat > 0) {
         cur_src->srcptr = cur_src->text;  /* back to start */
         cur_src->line = 0;
+#ifdef REPTNSYM
+        set_internal_abs(REPTNSYM,++cur_src->reptn);
+#endif
       }
       else {
         myfree(cur_src->linebuf);  /* linebuf is no longer needed, saves memory */
@@ -695,6 +702,9 @@ char *read_next_line(void)
           symbol *carg = internal_abs(CARGSYM);
           carg->expr = cur_src->cargexp;  /* restore parent CARG */
         }
+#endif
+#ifdef REPTNSYM
+        set_internal_abs(REPTNSYM,cur_src->reptn);  /* restore parent REPTN */
 #endif
       }
     }
@@ -789,7 +799,7 @@ char *read_next_line(void)
           nc = 2;
         }
       	s += 2;
-      }     
+      }
       else if (*(s+1) == '@') {
         /* \@ : insert a unique id "_nnnnnn" */
         if (len >= 7) {
@@ -800,13 +810,26 @@ char *read_next_line(void)
           s += 2;
           if (*s == '!') {
             /* push id onto stack */
-            if(id_stack_index >= IDSTACKSIZE)
+            if (id_stack_index >= IDSTACKSIZE)
               general_error(39);  /* id stack overflow */
             else
               id_stack[id_stack_index++] = unique_id;
             ++s;              
           }
-          else if(*s == '@') {
+          else if (*s == '?') {
+            /* push id below the top item on the stack */
+            if (id_stack_index >= IDSTACKSIZE)
+              general_error(39);  /* id stack overflow */
+            else if (id_stack_index <= 0)
+              general_error(45);  /* insert on empty id stack */
+            else {
+              id_stack[id_stack_index] = id_stack[id_stack_index-1];
+              id_stack[id_stack_index-1] = unique_id;
+              ++id_stack_index;
+            }
+            ++s;
+          }
+          else if (*s == '@') {
             /* pull id from stack */
             if (id_stack_index <= 0)
               general_error(40);  /* id pull without matching push */

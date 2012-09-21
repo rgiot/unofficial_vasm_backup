@@ -466,6 +466,9 @@ CPU- and output-module support them):
 @item rept <expression>
       Repeats the assembly of the block between @code{rept} and @code{endr}
       <expression> number of times. <expression> has to be positive.
+      The internal symbol @code{REPTN} always holds the iteration counter
+      of the inner repeat loop, starting with 0. @code{REPTN} is -1 outside
+      of any repeat block.
 
 @item rorg <expression>
       Sets the program counter <expression> bytes behind the start of the

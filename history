@@ -8,6 +8,8 @@ o Now using the faster djb2 hash table algorithm. Tuned hash table sizes
   for PPC, M68k and x86. Bigger symbol and macro hash tables.
 o The vasm core supports named arguments of the form "\identifier". It
   can be enabled by syntax modules on demand.
+o @? can be used in a macro to push the current id below the top item
+  on the stack.
 o Macro and repeat directives in comments could have caused some confusion.
 o Support for relocated origin blocks (RORG-blocks) in absolute output,
   which assign all labels in this block to a different base address,
@@ -36,6 +38,8 @@ o mot-syntax: PhxAss-compatibility mode allows blanks in operands.
 o mot-syntax: Ignore AsmOne AUTO directive.
 o mot-syntax: Although ignored, load, jumpptr and jumperr should accept
   non-constant expressions.
+o mot-syntax: Internal symbol REPTN can be used as iteration counter in
+  the inner repeat loop.
 o oldstyle-syntax: Enabled support for named macro arguments.
 o oldstyle-syntax: Fixed detection of endmac, endmacro, endrep and endrepeat.
 o oldstyle-syntax: Conditional directives also allow non-constant expressions,

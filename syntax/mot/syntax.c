@@ -12,7 +12,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm motorola syntax module 3.3b (c) 2002-2012 Frank Wille";
+char *syntax_copyright="vasm motorola syntax module 3.3c (c) 2002-2012 Frank Wille";
 
 char commentchar = ';';
 
@@ -1634,6 +1634,9 @@ int init_syntax()
   cond[0] = 1;
   clev = ifnesting = 0;
   secname_attr = 1; /* attribute is used to differentiate between sections */
+#ifdef REPTNSYM
+  set_internal_abs(REPTNSYM,-1);  /* reserve the REPTN symbol */
+#endif
   return 1;
 }
 

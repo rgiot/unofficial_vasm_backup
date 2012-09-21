@@ -656,16 +656,19 @@ source *new_source(char *filename,char *text,size_t size)
   s->name = mystrdup(filename);
   s->text = text;
   s->size = size;
-  s->repeat = 1;  /* read just once */
-  s->num_params = -1;	/* not a macro, no parameters */
+  s->repeat = 1;      /* read just once */
+  s->num_params = -1; /* not a macro, no parameters */
   s->param[0] = emptystr;
   s->param_len[0] = 0;
-  s->id = id++;	 /* every source has a unique id - important for macros */
+  s->id = id++;	      /* every source has a unique id - important for macros */
   s->srcptr = text;
   s->line = 0;
   s->linebuf = mymalloc(MAXLINELENGTH);
 #ifdef CARGSYM
   s->cargexp = NULL;
+#endif
+#ifdef REPTNSYM
+  s->reptn = -1;      /* outside of a rept-endr block */
 #endif
   return s;
 }

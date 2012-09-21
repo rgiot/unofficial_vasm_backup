@@ -1,5 +1,5 @@
 /* snytax.h  syntax header file for vasm */
-/* (c) in 2002,2005,2009-2011 by Volker Barthelmann and Frank Wille */
+/* (c) in 2002,2005,2009-2012 by Volker Barthelmann and Frank Wille */
 
 /* macros to recognize identifiers */
 int isidchar(char);
@@ -13,6 +13,9 @@ char *chkidend(char *,char *);
 
 /* symbol which contains the number of the current macro argument */
 #define CARGSYM "CARG"
+
+/* symbol which contains the current rept-endr iteration count */
+#define REPTNSYM "REPTN"
 
 /* we have a special skip() function for expressions, called exp_skip() */
 char *exp_skip(char *);

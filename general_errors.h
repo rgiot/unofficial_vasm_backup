@@ -38,8 +38,9 @@
   "internal symbol %s redefined by user",FATAL,
   "illegal relocation",ERROR,
   "macro id stack overflow",ERROR,
-  "macro id pull without matching push",ERROR,			/* 40 */
+  "macro id pull without matching push",ERROR,                  /* 40 */
   "division by zero",ERROR,
   "illegal macro argument",ERROR,
   "reloc org is already set",ERROR|FATAL,
   "reloc org was not set",ERROR,
+  "macro id insert on empty stack",ERROR,                       /* 45 */

@@ -92,6 +92,9 @@ struct source {
 #ifdef CARGSYM
   expr *cargexp;
 #endif
+#ifdef REPTNSYM
+  long reptn;
+#endif
 };
 
 /* symbol types */

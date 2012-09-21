@@ -696,6 +696,14 @@ function is defined as @code{char *chkidend(char *startpos,char *endpos)}.
 Defines the name of an optional symbol which contains the number of
 arguments in a macro.
 
+@item #define CARGSYM "CARG"
+Defines the name of an optional symbol which can be used to select a
+specific macro argument with @code{\.}, @code{\+} and @code{\-}.
+
+@item #define REPTNSYM "REPTN"
+Defines the name of an optional symbol containing the counter of the
+current repeat iteration.
+
 @item #define EXPSKIP() s=exp_skip(s)
 Defines an optional replacement for skip() to be used in expr.c, to skip
 blanks in an expression. Useful to forbid blanks in an expression and to

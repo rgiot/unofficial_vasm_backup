@@ -888,7 +888,6 @@ This module has the following error messages:
 @item 2015: missing outer displacement
 @item 2016: %c expected
 @item 2017: can't use PC register as index
-@item 2018: illegal relocation
 @item 2019: data register required
 @item 2020: illegal bitfield width/offset
 @item 2021: constant integer expression required

@@ -155,7 +155,6 @@ This module has the following error messages:
 @item 2011: %%%s not allowed with '%c' suffix
 @item 2012: illegal suffix '%c'
 @item 2013: instruction has no suffix and no register operands - size is unknown
-@item 2014: illegal relocation
 @item 2015: memory operand expected
 @item 2016: you cannot pop %%%s
 @item 2017: translating to %s %%%s,%%%s

@@ -1593,7 +1593,7 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
     if (base)
       add_reloc(&db->relocs,base,val,REL_ABS,bitsize,0);
     else
-      cpu_error(28);  /* illegal relocation */
+      general_error(38);  /* illegal relocation */
   }
 
   switch (db->size) {

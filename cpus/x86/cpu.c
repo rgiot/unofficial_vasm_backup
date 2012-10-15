@@ -724,7 +724,7 @@ static void optimize_jump(instruction *ip,operand *op,section *sec,
   if (!eval_expr(op->value,&val,sec,pc)) {
     base = find_base(op->value,sec,pc);
     if (base == NULL) {
-      cpu_error(13);  /* illegal relocation */
+      general_error(38);  /* illegal relocation */
       return;
     }
     label_in_sec = (base->type==LABSYM) && (base->sec==sec);
@@ -1374,7 +1374,7 @@ static unsigned char *output_disp(dblock *db,unsigned char *d,
             }
           }
           else
-            cpu_error(13);  /* illegal relocation */
+            general_error(38);  /* illegal relocation */
         }
         d = write_taddr(d,val,bits);
       }
@@ -1414,7 +1414,7 @@ static unsigned char *output_imm(dblock *db,unsigned char *d,
                      (int)(d-(unsigned char *)db->data)<<3,bits,-1);
           }
           else
-            cpu_error(13);  /* illegal relocation */
+            general_error(38);  /* illegal relocation */
         }
         d = write_taddr(d,val,bits);
       }
@@ -1851,7 +1851,7 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
     if (base)
       addreloc(&db->relocs,base,val,REL_ABS,0,bitsize,-1);
     else
-      cpu_error(13);  /* illegal relocation */
+      general_error(38);  /* illegal relocation */
   }
   write_taddr(db->data,val,bitsize);
   return db;

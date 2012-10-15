@@ -1783,7 +1783,7 @@ static void eval_oper(operand *op,section *sec,taddr pc,int final)
       if (!eval_expr(op->exp.value[i],&op->extval[i],sec,pc)) {
         op->base[i] = find_base(op->exp.value[i],sec,pc);
         if (final && op->base[i]==NULL)
-          cpu_error(17);  /* illegal relocation */
+          general_error(38);  /* illegal relocation */
       }
     }
     else
@@ -4598,7 +4598,7 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
     if (!eval_expr(op->exp.value[0],&val,sec,pc)) {
       base = find_base(op->exp.value[0],sec,pc);
       if (base == NULL)
-        cpu_error(17);  /* illegal relocation */
+        general_error(38);  /* illegal relocation */
     }
   }
 

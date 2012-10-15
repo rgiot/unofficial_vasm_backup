@@ -343,7 +343,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
           }
         }
         else
-          cpu_error(7);  /* illegal relocation */
+          general_error(38);  /* illegal relocation */
       }
       rangecheck(val,op->type);
     }
@@ -417,7 +417,7 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
       }
     }
     else
-      cpu_error(7);  /* illegal relocation */
+      general_error(38);  /* illegal relocation */
   }
   if (bitsize < 16) {
     if (val<-0x80 || val>0xff)

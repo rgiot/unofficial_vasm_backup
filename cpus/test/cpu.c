@@ -174,7 +174,7 @@ static char *fill_operand(operand *p,section *sec,taddr pc,char *d,rlist **reloc
     reloc->size=16;
     reloc->sym=find_base(p->offset,sec,pc);
     if(!reloc->sym){
-      cpu_error(2);
+      general_error(38);
     }else{
       rl->reloc=reloc;
       rl->next=*relocs;
@@ -245,9 +245,9 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
   if(op->type!=OP_ABS)
     ierror(0);
   if(bitsize!=8&&bitsize!=16&&bitsize!=32)
-    cpu_error(3);
-  if(!eval_expr(op->offset,&val,sec,pc)&&bitsize!=32)
     cpu_error(2);
+  if(!eval_expr(op->offset,&val,sec,pc)&&bitsize!=32)
+    general_error(38);
   if(bitsize==8){
     new->data[0]=val;
   }else if(bitsize==16){

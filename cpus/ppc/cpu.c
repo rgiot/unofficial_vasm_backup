@@ -464,7 +464,7 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
       *reloclist = rl;
     }
     else
-      cpu_error(10);  /* illegal relocation */
+      general_error(38);  /* illegal relocation */
   }
 
   return val;

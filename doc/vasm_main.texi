@@ -344,5 +344,7 @@ The frontend has the following error messages:
 @item 43: illegal macro argument
 @item 44: reloc org is already set
 @item 45: reloc org was not set
+@item 46: macro id insert on empty stack
+@item 47: bad file-offset argument
 
 @end itemize

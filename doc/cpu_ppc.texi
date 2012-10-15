@@ -141,7 +141,6 @@ This module has the following error messages:
 @item 2008: multiple relocation attributes
 @item 2009: multiple hi/lo modifiers
 @item 2010: data size %d not supported
-@item 2011: illegal relocation
 @item 2012: relocation attribute not supported by operand
 @item 2013: operand out of range: %ld (allowed: %ld to %ld)
 @item 2014: not a valid register (0-31)

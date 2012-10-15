@@ -822,7 +822,7 @@ static void handle_incbin(char *s)
   char *name;
 
   if (name = parse_name(&s)) {
-    include_binary_file(name);
+    include_binary_file(name,0,0);
   }
 }
 

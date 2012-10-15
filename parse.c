@@ -280,7 +280,7 @@ int check_indir(char *p,char *q)
 }
 
 
-void include_binary_file(char *inname)
+void include_binary_file(char *inname,long nbskip,unsigned long nbkeep)
 /* locate a binary file and convert into a data atom */
 {
   char *filename;
@@ -291,12 +291,23 @@ void include_binary_file(char *inname)
     taddr size = filesize(f);
 
     if (size > 0) {
-      dblock *db = new_dblock();
+      if (nbskip>=0 && nbskip<=size) {
+        dblock *db = new_dblock();
 
-      db->size = size;
-      db->data = mymalloc(size);
-      fread(db->data,1,size,f);
-      add_atom(0,new_data_atom(db,1));
+        if (nbkeep > (unsigned long)(size - nbskip) || nbkeep==0)
+          db->size = size - nbskip;
+        else
+          db->size = nbkeep;
+
+        db->data = mymalloc(size);
+        if (nbskip > 0)
+          fseek(f,nbskip,SEEK_SET);
+
+        fread(db->data,1,db->size,f);
+        add_atom(0,new_data_atom(db,1));
+      }
+      else
+        general_error(46);  /* bad file-offset argument */
     }
     fclose(f);
   }

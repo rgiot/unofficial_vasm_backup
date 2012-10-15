@@ -12,7 +12,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm oldstyle syntax module 0.9 (c) 2002-2012 Frank Wille";
+char *syntax_copyright="vasm oldstyle syntax module 0.10 (c) 2002-2012 Frank Wille";
 
 static char textname[]=".text",textattr[]="acrx";
 static char dataname[]=".data",dataattr[]="adrw";
@@ -586,10 +586,24 @@ static void handle_include(char *s)
 static void handle_incbin(char *s)
 {
   char *name;
+  long delta = 0;
+  unsigned long nbbytes = 0;
 
   if (name = parse_name(&s)) {
+    s = skip(s);
+    if (*s == ',') {
+      s = skip(s+1);
+      delta = parse_constexpr(&s);
+      if (delta < 0)
+        delta = 0;
+      s = skip(s);
+      if (*s == ',') {
+        s = skip(s+1);
+        nbbytes = parse_constexpr(&s);
+      }
+    }
     eol(s);
-    include_binary_file(name);
+    include_binary_file(name,delta,nbbytes);
   }
 }
 

@@ -15,7 +15,7 @@
   "missing outer displacement",ERROR,
   "%c expected",ERROR,                                               /* 15 */
   "can't use PC register as index",ERROR,
-  "illegal relocation",ERROR,
+  "UNUSED",ERROR,
   "data register required",ERROR,
   "illegal bitfield width/offset",ERROR,
   "constant integer expression required",ERROR,                      /* 20 */

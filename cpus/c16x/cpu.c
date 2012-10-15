@@ -336,7 +336,7 @@ static taddr absoffset2(expr *tree,int mod,section *sec,taddr pc,rlist **relocs,
     reloc->sym=find_base(tree,sec,pc);
     reloc->mask=mask;
     if(!reloc->sym){
-      cpu_error(2);
+      general_error(38);
     }else{
       rl->reloc=reloc;
       rl->next=*relocs;

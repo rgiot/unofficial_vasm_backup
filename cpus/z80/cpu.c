@@ -575,7 +575,7 @@ mnemonic mnemonics[] = {
 
 int mnemonic_cnt=sizeof(mnemonics)/sizeof(mnemonics[0]);
 
-char *cpu_copyright="vasm 8080/gbz80/z80/z180/rcmX000 cpu backend 0.2c (c) 2007,2009 Dominic Morris";
+char *cpu_copyright="vasm 8080/gbz80/z80/z180/rcmX000 cpu backend 0.2d (c) 2007,2009 Dominic Morris";
 char *cpuname = "z80";
 int bitsperbyte = 8;
 int bytespertaddr = 2;
@@ -1593,7 +1593,10 @@ static void rabbit_emu_call(instruction *ip,dblock *db,section *sec,taddr pc)
         expr = parse_expr(&t_expr);
         if ( eval_expr(expr, &val, sec, pc) == 0 ) {
             symbol *base = find_base(expr,sec,pc);
-            add_reloc(&db->relocs,base, val, REL_ABS, 8, (d - start) * 8);
+            if (base)
+                add_reloc(&db->relocs,base, val, REL_ABS, 8, (d - start) * 8);
+            else
+                general_error(38);  /* illegal relocation */
         } 
         free_expr(expr);
         *d++ = val % 256;
@@ -1603,7 +1606,10 @@ static void rabbit_emu_call(instruction *ip,dblock *db,section *sec,taddr pc)
     /* Evaluate the real expression */
     if ( eval_expr(ip->op[1]->value, &val, sec, pc) == 0 ) {
         symbol *base = find_base(ip->op[1]->value,sec,pc);
-        add_reloc(&db->relocs,base, val, REL_ABS, 8, (d - start) * 8);
+        if (base)
+            add_reloc(&db->relocs,base, val, REL_ABS, 8, (d - start) * 8);
+        else
+            general_error(38);  /* illegal relocation */
     } 
     *d++ = val % 256;
     *d++ = val / 256;
@@ -1639,10 +1645,12 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
         rlist *rl;
 
         modifier = 0;
-        base = find_base(op->value,sec,pc);
- 
-        rl = add_reloc(&db->relocs,base,val,REL_ABS,bitsize,0);
-        val = apply_modifier((nreloc *)rl->reloc,val);
+        if (base = find_base(op->value,sec,pc)) {
+            rl = add_reloc(&db->relocs,base,val,REL_ABS,bitsize,0);
+            val = apply_modifier((nreloc *)rl->reloc,val);
+        }
+        else
+            general_error(38);  /* illegal relocation */
     }
     if (bitsize < 16 && (val<-0x80 || val>0xff))
         cpu_error(3, val);  /* operand doesn't fit into 8-bits */
@@ -1706,7 +1714,10 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
                     expr = parse_expr(&bufptr);
                     if ( eval_expr(expr, &val, sec, pc) == 0 ) {
                         symbol *base = find_base(expr,sec,pc);
-                        add_reloc(&db->relocs,base, val, REL_ABS, 8,  8);
+                        if (base)
+                            add_reloc(&db->relocs,base, val, REL_ABS, 8,  8);
+                        else
+                            general_error(38);  /* illegal relocation */
                     } 
                     *d++ = val % 256;
                     *d++ = val / 256;

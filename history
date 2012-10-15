@@ -30,6 +30,8 @@ o m68k: New optimizations: ORI #0,<ea> and EORI #0,<ea> are optimized to
 o m68k: New optimization: LEA 0,An is optimized to SUBA.L An,An.
 o PPC: Reworked cpu selection.
 o PPC: Reworked operand parser and evaluater. mfdec is now recognized.
+o z80: Fixed crashes and internal errors when an expression creates an
+  illegal relocation.
 o z80: Operands in parentheses were not allowed for defining data.
 o z80: A '#' prefix selects hexadecimal radix, as used in some assemblers.
 o 6502: Improved detection of indirect addressing modes. (expr)+(expr) and
@@ -54,6 +56,9 @@ o oldstyle-syntax: New directives rorg, rend, phase, dephase for a relocated
   label origin.
 o oldstyle-syntax: print a warning when alignment is too big.
 o oldstyle-syntax: LIST and NOLIST directives to control listing file output.
+o oldstyle-syntax: INCBIN got two optional arguments to skip bytes at the
+  beginning of a file and to restrict the size of the included data
+  (contributed by Romain Giot).
 o std-syntax: Implemented .abort, .err and .fail directives.
 o std-syntax: Allow non-constant expressions for conditional directives,
   with the same restrictions as in the other syntax modules.

@@ -26,4 +26,3 @@
   "%d-bit unsigned immediate offset out of range (%ld)",ERROR,          /*25*/
   "offset has to be a multiple of %d",ERROR,
   "instruction at unaligned address",ERROR,
-  "illegal relocation",ERROR,

@@ -12,7 +12,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm std syntax module 3.7a (c) 2002-2012 Volker Barthelmann";
+char *syntax_copyright="vasm std syntax module 3.8 (c) 2002-2012 Volker Barthelmann";
 
 static char textname[]=".text",textattr[]="acrx";
 static char dataname[]=".data",dataattr[]="adrw";
@@ -706,8 +706,10 @@ static void handle_macro(char *s)
   char *name;
 
   if (name = parse_identifier(&s)) {
-    eol(s);
-    new_macro(name,nodotneeded?endm_dirlist:dendm_dirlist,NULL);
+    s=skip(s);
+    if(*s==commentchar)
+      s=NULL;
+    new_macro(name,nodotneeded?endm_dirlist:dendm_dirlist,s);
     myfree(name);
   }
   else
@@ -1240,6 +1242,8 @@ int init_syntax()
 #endif  
   cond[0] = 1;
   clev = ifnesting = 0;
+
+  namedmacparams = 1;  /* enabled named macro arguments, like gas */
   return 1;
 }
 

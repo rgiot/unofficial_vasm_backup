@@ -128,7 +128,7 @@ static void resolve_section(section *sec)
       if(p->type==RORG){
         if(rorg_pc!=0)
           general_error(43);  /* reloc org is already set */
-        rorg_pc=p->content.rorg;
+        rorg_pc=*p->content.rorg;
         org_pc=sec->pc;
         sec->pc=rorg_pc;
       }
@@ -202,7 +202,7 @@ static void assemble(void)
         p->list->pc=sec->pc;
       }
       if(p->type==RORG&&rorg_pc==0){
-        rorg_pc=p->content.rorg;
+        rorg_pc=*p->content.rorg;
         org_pc=sec->pc;
         sec->pc=rorg_pc;
       }

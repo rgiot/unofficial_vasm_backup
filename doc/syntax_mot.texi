@@ -411,6 +411,8 @@ CPU- and output-module support them):
       @code{\.} selects the argument indexed by the current value of
       @code{CARG}. @code{\+} and @code{\-} do the same, but additionally
       post-increment and post-decrement @code{CARG}.
+      @code{\()} may be used as a separator between the name of a macro
+      argument and the subsequent text.
 
 @item mexit
       Leave the current macro and continue with assembling the parent

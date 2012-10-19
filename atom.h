@@ -75,7 +75,7 @@ typedef struct atom {
     char *ptext;
     expr *pexpr;
     expr *roffs;
-    taddr rorg;
+    taddr *rorg;
   } content;
 } atom;
 

@@ -80,6 +80,12 @@ CPU- and output-module allow it):
 @item <symbol> = <expression>
       Equivalent to @code{<symbol> equ <expression>}.
 
+@item abyte <offset>,<exp1>[,<exp2>,"<string1>"...]
+      Write the integer or string constant operands into successive
+      bytes of memory in the current section while adding the constant
+      <offset> to each byte. Any combination of integer and character
+      string constant operands is permitted.
+
 @item addr <exp1>[,<exp2>...]
       Equivalent to @code{word <exp1>[,<exp2>...]}.
 
@@ -316,6 +322,8 @@ CPU- and output-module allow it):
       (mnemonic extension), when given.
       The special argument @code{\@@} inserts a unique id, useful for
       defining labels.
+      @code{\()} may be used as a separator between the name of a macro
+      argument and the subsequent text.
 
 @item mdat <file>
       Equivalent to @code{incbin <file>}.

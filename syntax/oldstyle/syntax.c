@@ -100,7 +100,9 @@ char *skip_operand(char *s)
 }
 
 
-static void handle_data(char *s,int size)
+#define handle_data(a,b) handle_data_offset(a,b,0)
+
+static void handle_data_offset(char *s,int size,int offset)
 {
   for (;;) {
     char *opstart = s;
@@ -109,6 +111,12 @@ static void handle_data(char *s,int size)
 
     if (size==8 && (*s=='\"' || *s=='\'')) {
       if (db = parse_string(&opstart,*s,8)) {
+        if (offset != 0) {
+          int i;
+
+          for (i=0; i<db->size; i++)
+            db->data[i] = db->data[i] + offset;
+        }
         add_atom(0,new_data_atom(db,1));
         s = opstart;
       }
@@ -119,6 +127,8 @@ static void handle_data(char *s,int size)
       if (parse_operand(opstart,s-opstart,op,DATA_OPERAND(size))) {
         atom *a;
 
+        if (offset != 0)
+          op->value = make_expr(ADD,number_expr(offset),op->value);
         a = new_datadef_atom(abs(size),op);
         a->align = 1;
         add_atom(0,a);
@@ -194,6 +204,20 @@ static void handle_d24(char *s)
 static void handle_d32(char *s)
 {
   handle_data(s,32);
+}
+
+
+static void handle_d8_offset(char *s)
+{
+  taddr offs = parse_constexpr(&s);
+
+  s = skip(s);
+  if (*s == ',') {
+    s = skip(s+1);
+    handle_data_offset(s,8,offs);
+  }
+  else
+    syntax_error(9);  /* , expected */
 }
 
 
@@ -708,6 +732,7 @@ struct {
   "dw",handle_d16,
   "dfw",handle_d16,
   "defw",handle_d16,
+  "abyte",handle_d8_offset,
   "ds",handle_spc8,
   "dsb",handle_spc8,
   "fill",handle_spc8,

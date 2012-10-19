@@ -900,6 +900,11 @@ char *read_next_line(void)
         nc = copy_macro_param(tolower((unsigned char)*(s+1))-'a'+10,d,len);
         s += 2;
       }
+      else if (*(s+1)=='(' && *(s+2)==')') {
+        /* \() is just skipped, useful to terminate named macro parameters */
+        nc = 0;
+        s += 3;
+      }
       if (nc >= 0) {
         len -= nc;
         d += nc;

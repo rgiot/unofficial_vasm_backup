@@ -215,16 +215,19 @@ See @code{.string}.
 @item .long <exp1>[,<exp2>...]
       See @code{.word}.
 
-@item .macro <name>
+@item .macro <name> [<arguments>...]
       Defines a macro which can be referenced by <name>. The macro
       definition is closed by an @code{.endm} directive. When calling
       a macro you may pass up to 9 arguments, separated by comma. Those
       arguments are referenced within the macro context as @code{\1} to
-      @code{\9}.
+      @code{\9}, or optionally by named arguments, which may be specified
+      after the <name>, separated by commas.
       Argument @code{\0} is set to the macro's first qualifier
       (mnemonic extension), when given.
       The special argument @code{\@@} inserts a unique id,
       useful for defining labels.
+      @code{\()} may be used as a separator between the name of a macro
+      argument and the subsequent text.
 
 @item .nolist
       The following lines will not be visible in a listing file.

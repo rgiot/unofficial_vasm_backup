@@ -8,8 +8,9 @@ o Now using the faster djb2 hash table algorithm. Tuned hash table sizes
   for PPC, M68k and x86. Bigger symbol and macro hash tables.
 o The vasm core supports named arguments of the form "\identifier". It
   can be enabled by syntax modules on demand.
-o @? can be used in a macro to push the current id below the top item
+o "\@?" can be used in a macro to push the current id below the top item
   on the stack.
+o "\()" can be used to separate a macro name from the subsequent context.
 o Macro and repeat directives in comments could have caused some confusion.
 o Support for relocated origin blocks (RORG-blocks) in absolute output,
   which assign all labels in this block to a different base address,
@@ -59,11 +60,14 @@ o oldstyle-syntax: LIST and NOLIST directives to control listing file output.
 o oldstyle-syntax: INCBIN got two optional arguments to skip bytes at the
   beginning of a file and to restrict the size of the included data
   (contributed by Romain Giot).
+o oldstyle-syntax: New directive abyte, which adds a constant offset to
+  each byte written (contributed by Romain Giot).
 o std-syntax: Implemented .abort, .err and .fail directives.
 o std-syntax: Allow non-constant expressions for conditional directives,
   with the same restrictions as in the other syntax modules.
 o std-syntax: print a warning when alignment is too big.
 o std-syntax: .list and .nolist directives to control listing file output.
+o std-syntax: Enabled support for named macro arguments.
 
 - 1.5c (10.12.11)
 o Define a __VASM symbol to identify the assembler.

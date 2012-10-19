@@ -337,7 +337,7 @@ void print_atom(FILE *f,atom *p)
       print_expr(f,p->content.roffs);
       break;
     case RORG:
-      fprintf(f,"rorg: relocate to 0x%llx",UNS_TADDR(p->content.rorg));
+      fprintf(f,"rorg: relocate to 0x%llx",UNS_TADDR(*p->content.rorg));
       break;
     case RORGEND:
       fprintf(f,"rorg end");
@@ -475,11 +475,13 @@ atom *new_roffs_atom(expr *offs)
 atom *new_rorg_atom(taddr raddr)
 {
   atom *new = mymalloc(sizeof(*new));
+  taddr *newrorg = mymalloc(sizeof(taddr));
 
+  *newrorg = raddr;
   new->next = 0;
   new->type = RORG;
   new->align = 1;
-  new->content.rorg = raddr;
+  new->content.rorg = newrorg;
   return new;
 }
 

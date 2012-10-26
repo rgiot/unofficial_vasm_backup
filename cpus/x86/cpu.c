@@ -722,8 +722,7 @@ static void optimize_jump(instruction *ip,operand *op,section *sec,
   taddr val,diff;
 
   if (!eval_expr(op->value,&val,sec,pc)) {
-    base = find_base(op->value,sec,pc);
-    if (base == NULL) {
+    if (find_base(&base,op->value,sec,pc) != BASE_OK) {
       general_error(38);  /* illegal relocation */
       return;
     }
@@ -1352,9 +1351,9 @@ static unsigned char *output_disp(dblock *db,unsigned char *d,
 
         if (!eval_expr(op->value,&val,sec,pc)) {
           mnemonic *mnemo = &mnemonics[ip->code];
-          symbol *base = find_base(op->value,sec,pc);
+          symbol *base;
 
-          if (base) {
+          if (find_base(&base,op->value,sec,pc) == BASE_OK) {
             if ((mnemo->ext.opcode_modifier & (Jmp|JmpByte|JmpDword))
                 || (op->flags & OPER_PCREL)) {
               /* handle pc-relative displacement for jumps */
@@ -1407,9 +1406,9 @@ static unsigned char *output_imm(dblock *db,unsigned char *d,
 #endif
 
         if (!eval_expr(op->value,&val,sec,pc)) {
-          symbol *base = find_base(op->value,sec,pc);
+          symbol *base;
 
-          if (base) {
+          if (find_base(&base,op->value,sec,pc) == BASE_OK) {
             addreloc(&db->relocs,base,val,REL_ABS,
                      (int)(d-(unsigned char *)db->data)<<3,bits,-1);
           }
@@ -1617,7 +1616,7 @@ int parse_operand(char *p,int len,operand *op,int requirements)
       regsym *sreg = parse_reg(&p);
 
       p = skip(p);
-      if ((sreg->reg_type & (SegReg2|SegReg3)) && *p++==':') {
+      if (sreg!=NULL && (sreg->reg_type & (SegReg2|SegReg3)) && *p++==':') {
         op->segoverride = sreg;
         need_mem_oper = 1;  /* only memory operands may follow */
         p = skip(p);
@@ -1846,10 +1845,13 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
   db->size = bitsize >> 3;
   db->data = mymalloc(db->size);
   if (!eval_expr(op->value,&val,sec,pc)) {
-    symbol *base = find_base(op->value,sec,pc);
-
+    symbol *base;
+    int btype;
+    
+    btype = find_base(&base,op->value,sec,pc);
     if (base)
-      addreloc(&db->relocs,base,val,REL_ABS,0,bitsize,-1);
+      addreloc(&db->relocs,base,val,
+               btype==BASE_PCREL?REL_PC:REL_ABS,0,bitsize,-1);
     else
       general_error(38);  /* illegal relocation */
   }

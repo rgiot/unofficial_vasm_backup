@@ -900,10 +900,13 @@ whether this type has been handled or not. Your operation will by applied on
 the value @code{v} and the result is stored in @code{*r}. The flag @code{c}
 is passed as 1 when the value is constant (no relocatable addresses involved).
 
-@item #define EXT_FIND_BASE(e,s,p)
-Defines a function with the arguments @code{(expr *e, section *s, taddr p)}
-to return a pointer to the base symbol of expression @code{e}. The type
-in @code{e->type} has to checked to be one of the operations to handle.
+@item #define EXT_FIND_BASE(b,e,s,p)
+Defines a function with the arguments
+@code{(symbol **b, expr *e, section *s, taddr p)}
+to save a pointer to the base symbol of expression @code{e} into the
+symbol pointer, pointed to by @code{b}. The type of this base is given
+by an @code{int} return code. Further on, @code{e->type} has to checked
+to be one of the operations to handle.
 The section pointer @code{s} and the current pc @code{p} are needed to call
 the standard @code{find_base()} function.
 @end table

@@ -1,5 +1,5 @@
 /* expr.c expression handling for vasm */
-/* (c) in 2002-2010 by Volker Barthelmann */
+/* (c) in 2002-2012 by Volker Barthelmann */
 
 enum {
   ADD,SUB,MUL,DIV,MOD,NEG,CPL,LAND,LOR,BAND,BOR,XOR,NOT,LSH,RSH,
@@ -42,4 +42,9 @@ void free_expr(expr *);
 void simplify_expr(expr *);
 int eval_expr(expr *,taddr *,section *,taddr);
 void print_expr(FILE *,expr *);
-symbol *find_base(expr *,section *,taddr);
+int find_base(symbol **,expr *,section *,taddr);
+
+/* find_base return codes */
+#define BASE_ILLEGAL 0
+#define BASE_OK 1
+#define BASE_PCREL 2

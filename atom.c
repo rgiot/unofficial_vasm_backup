@@ -162,8 +162,7 @@ static taddr space_size(sblock *sb,section *sec,taddr pc)
       taddr fill,i;
 
       if (!eval_expr(sb->fill_exp,&fill,sec,pc)) {
-        base = find_base(sb->fill_exp,sec,pc);
-        if (!base)
+        if (find_base(&base,sb->fill_exp,sec,pc)==BASE_ILLEGAL)
           general_error(38);  /* illegal relocation */
       }
       copy_cpu_taddr(sb->fill,fill,sb->size);

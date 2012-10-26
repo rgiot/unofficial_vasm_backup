@@ -170,6 +170,14 @@ See @code{.string}.
       Conditionally assemble the following lines if <expression> is
       less than zero or equal.
 
+@item .ifb <operand>
+      Conditionally assemble the following lines when <operand> is
+      completely blank, except an optional comment.
+
+@item .ifnb <operand>
+      Conditionally assemble the following lines when <operand> is
+      non-blank.
+
 @item .ifdef <symbol>
       Conditionally assemble the following lines if <symbol> is defined.
 

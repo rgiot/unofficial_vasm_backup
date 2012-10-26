@@ -172,8 +172,7 @@ static char *fill_operand(operand *p,section *sec,taddr pc,char *d,rlist **reloc
     rl->type=REL_ABS;
     reloc->offset=roffset*8;
     reloc->size=16;
-    reloc->sym=find_base(p->offset,sec,pc);
-    if(!reloc->sym){
+    if (find_base(&reloc->sym,p->offset,sec,pc)!=BASE_OK){
       general_error(38);
     }else{
       rl->reloc=reloc;

@@ -295,15 +295,16 @@ int parse_operand(char *p,int len,operand *op,int requires)
 static taddr reloffset(expr *tree,section *sec,taddr pc)
 {
   symbol *sym;
+  int btype;
   taddr val;
   simplify_expr(tree);
   if(tree->type==NUM){
     /* should we do it like this?? */
     val=tree->c.val;
   }else{
-    sym=find_base(tree,sec,pc);
-    if(!sym||sym->type!=LABSYM||sym->sec!=sec)
-      return 0xffff;
+    btype=find_base(&sym,tree,sec,pc);
+    if(btype!=BASE_OK||sym->type!=LABSYM||sym->sec!=sec)
+      val=0xffff;
     else{
       eval_expr(tree,&val,sec,pc);
       val=val-pc;
@@ -333,9 +334,8 @@ static taddr absoffset2(expr *tree,int mod,section *sec,taddr pc,rlist **relocs,
     rl->type=REL_ABS;
     reloc->offset=roffset;
     reloc->size=size;
-    reloc->sym=find_base(tree,sec,pc);
     reloc->mask=mask;
-    if(!reloc->sym){
+    if(find_base(&reloc->sym,tree,sec,pc)!=BASE_OK){
       general_error(38);
     }else{
       rl->reloc=reloc;

@@ -876,6 +876,18 @@ static void handle_erem(char *s)
 }
 
 
+static void handle_ifb(char *s)
+{
+  s = skip(s);
+  cond[++clev] = (*s=='\0' || *s==commentchar);
+}
+
+static void handle_ifnb(char *s)
+{
+  s = skip(s);
+  cond[++clev] = (*s!='\0' && *s!=commentchar);
+}
+
 static void ifc(char *s,int b)
 {
   char *str1,*str2;
@@ -1248,6 +1260,8 @@ struct {
   "mexit",handle_mexit,
   "rem",handle_rem,
   "erem",handle_erem,
+  "ifb",handle_ifb,
+  "ifnb",handle_ifnb,
   "ifc",handle_ifc,
   "ifnc",handle_ifnc,
   "ifd",handle_ifd,

@@ -1131,7 +1131,7 @@ static void check_basereg(operand *op)
    from the operand's displacement value. */
 {
   if (op->reg>=0 && op->reg<=6 && baseexp[op->reg] && op->exp.value[0]) {
-    if (find_base(op->exp.value[0],NULL,0)) {
+    if (find_base(NULL,op->exp.value[0],NULL,0) == BASE_OK) {
       expr *new = make_expr(SUB,op->exp.value[0],copy_tree(baseexp[op->reg]));
 
       simplify_expr(new);
@@ -1781,8 +1781,8 @@ static void eval_oper(operand *op,section *sec,taddr pc,int final)
     op->base[i] = NULL;
     if ((op->flags&FL_expMask)==FL_Exp && op->exp.value[i]!=NULL) {
       if (!eval_expr(op->exp.value[i],&op->extval[i],sec,pc)) {
-        op->base[i] = find_base(op->exp.value[i],sec,pc);
-        if (final && op->base[i]==NULL)
+        op->basetype[i] = find_base(&op->base[i],op->exp.value[i],sec,pc);
+        if (final && op->basetype[i]==BASE_ILLEGAL)
           general_error(38);  /* illegal relocation */
       }
     }
@@ -4002,6 +4002,16 @@ static unsigned char *write_branch(dblock *db,unsigned char *d,operand *op,
 }
 
 
+static unsigned char *write_extval(int num,size_t size,dblock *db,
+                                   unsigned char *d,operand *op,int rtype)
+{
+  if (rtype==REL_ABS && op->basetype[num]==BASE_PCREL)
+    op->extval[num] += (char *)d - db->data;  /* fix addend for label differences */
+
+  return setval(1,d,size,op->extval[num]);
+}
+
+
 static unsigned char *write_ea_ext(dblock *db,unsigned char *d,operand *op,
                                    char ext,section *sec,taddr pc)
 /* write effective address extension words, handle relocs */
@@ -4014,6 +4024,8 @@ static unsigned char *write_ea_ext(dblock *db,unsigned char *d,operand *op,
     int rtype = REL_NONE;
     int roffs = (d - (unsigned char *)db->data) << 3;
     int rsize = 0;
+    int ortype = REL_NONE;
+    int orsize = 0;
 
     if (op->flags & FL_020up) {
       if (!(cpu_type & (m68020up|cpu32))) {
@@ -4029,10 +4041,13 @@ static unsigned char *write_ea_ext(dblock *db,unsigned char *d,operand *op,
       /* d16(An) needs one extension word */
       if (op->base[0]) {
         rsize = 16;
-        if (op->base[0]->type==IMPORT && op->reg!=sdreg)
+        if ((op->base[0]->type==IMPORT && op->reg!=sdreg) ||
+            op->basetype[0]==BASE_PCREL)
           rtype = REL_ABS;
-        else
+        else if (op->basetype[0]==BASE_OK)
           rtype = REL_SD;
+        else
+          general_error(38);  /* illegal relocation */
       }
       if (rtype == REL_SD) {
         if (typechk && (op->extval[0]<0 || op->extval[0]>0xffff))
@@ -4042,7 +4057,7 @@ static unsigned char *write_ea_ext(dblock *db,unsigned char *d,operand *op,
         if (typechk && (op->extval[0]<-0x8000 || op->extval[0]>0x7fff))
           cpu_error(29);  /* displacement out of range */
       }
-      d = setval(1,d,2,op->extval[0]);
+      d = write_extval(0,2,db,d,op,rtype);
     }
 
     else if (op->mode == MODE_An8Format) {
@@ -4056,39 +4071,41 @@ static unsigned char *write_ea_ext(dblock *db,unsigned char *d,operand *op,
           if (typechk && (op->extval[0]<-0x8000 || op->extval[0]>0x7fff))
             cpu_error(29);  /* displacement out of range */
           if (op->base[0]) {
-            if (op->base[0]->type==IMPORT) {
+            rsize = 16;
+            if (op->base[0]->type==IMPORT ||
+                (op->base[0]->type==LABSYM && op->basetype[0]==BASE_PCREL))
               rtype = REL_ABS;
-              rsize = 16;
-            }
             else
               cpu_error(30);  /* absolute displacement expected */
           }
-          d = setval(1,d,2,op->extval[0]);
+          d = write_extval(0,2,db,d,op,rtype);
         }
         else if (FW_getBDSize(op->format) == FW_Long) {
           if (op->base[0]) {
             rtype = REL_ABS;
             rsize = 32;
           }
-          d = setval(1,d,4,op->extval[0]);
+          d = write_extval(0,4,db,d,op,rtype);
         }
         if (FW_getIndSize(op->format) == FW_Word) {
           if (typechk && (op->extval[1]<-0x8000 || op->extval[1]>0x7fff))
             cpu_error(29);  /* displacement out of range */
           if (op->base[1]) {
-            if (op->base[1]->type==IMPORT)
-              add_reloc(&db->relocs,op->base[1],op->extval[1],REL_ABS,16,
-                        (rtype==REL_NONE) ? roffs : roffs+rsize);
+            orsize = 16;
+            if (op->base[1]->type==IMPORT ||
+                (op->base[1]->type==LABSYM && op->basetype[1]==BASE_PCREL))
+              ortype = REL_ABS;
             else
               cpu_error(30);  /* absolute displacement expected */
           }
-          d = setval(1,d,2,op->extval[1]);
+          d = write_extval(1,2,db,d,op,ortype);
         }
         else if (FW_getIndSize(op->format) == FW_Long) {
-          if (op->base[1])
-            add_reloc(&db->relocs,op->base[1],op->extval[1],REL_ABS,32,
-                      (rtype==REL_NONE) ? roffs : roffs+rsize);
-          d = setval(1,d,4,op->extval[1]);
+          if (op->base[1]) {
+            ortype = REL_ABS;
+            orsize = 32;
+          }
+          d = write_extval(1,4,db,d,op,ortype);
         }
       }
       else {
@@ -4096,10 +4113,10 @@ static unsigned char *write_ea_ext(dblock *db,unsigned char *d,operand *op,
         if (typechk && (op->extval[0]<-0x80 || op->extval[0]>0x7f))
           cpu_error(29);  /* displacement out of range */
         if (op->base[0]) {
-          if (op->base[0]->type==IMPORT) {
+          rsize = 8;
+          if (op->base[0]->type==IMPORT ||
+              (op->base[0]->type==LABSYM && op->basetype[0]==BASE_PCREL))
             rtype = REL_ABS;
-            rsize = 8;
-          }
           else
             cpu_error(30);  /* absolute displacement expected */
         }
@@ -4168,19 +4185,21 @@ static unsigned char *write_ea_ext(dblock *db,unsigned char *d,operand *op,
             if (typechk && (op->extval[1]<-0x8000 || op->extval[1]>0x7fff))
               cpu_error(29);  /* displacement out of range */
             if (op->base[1]) {
-              if (op->base[1]->type==IMPORT)
-                add_reloc(&db->relocs,op->base[1],op->extval[1],REL_ABS,16,
-                          (rtype==REL_NONE) ? roffs : roffs+rsize);
+              if (op->base[1]->type==IMPORT) {
+                ortype = REL_ABS;
+                orsize = 16;
+              }
               else
                 cpu_error(30);  /* absolute displacement expected */
             }
-            d = setval(1,d,2,op->extval[1]);
+            d = write_extval(1,2,db,d,op,ortype);
           }
           else if (FW_getIndSize(op->format) == FW_Long) {
-            if (op->base[1])
-              add_reloc(&db->relocs,op->base[1],op->extval[1],REL_ABS,32,
-                        (rtype==REL_NONE) ? roffs : roffs+rsize);
-            d = setval(1,d,4,op->extval[1]);
+            if (op->base[1]) {
+              ortype = REL_ABS;
+              orsize = 32;
+            }
+            d = write_extval(1,4,db,d,op,ortype);
           }
         }
         else {
@@ -4212,7 +4231,7 @@ static unsigned char *write_ea_ext(dblock *db,unsigned char *d,operand *op,
           rtype = REL_ABS;
           rsize = 16;
         }
-        d = setval(1,d,2,op->extval[0]);
+        d = write_extval(0,2,db,d,op,rtype);
       }
 
       else if (op->reg == REG_AbsLong) {
@@ -4221,43 +4240,47 @@ static unsigned char *write_ea_ext(dblock *db,unsigned char *d,operand *op,
           rtype = REL_ABS;
           rsize = 32;
         }
-        d = setval(1,d,4,op->extval[0]);
+        d = write_extval(0,4,db,d,op,rtype);
       }
 
       else if (op->reg == REG_Immediate) {
         /* #immediate */
-        taddr ev = op->extval[0];
         int f = op->flags & FL_expMask;
         int err;
+
+        if (op->base[0] != NULL)
+          rtype = REL_ABS;
 
         switch (ext) {
           case 'b':
             if (f == FL_Exp) {
-              if (typechk && (ev<-0x80 || ev>0xff))
+              roffs += 8;
+              rsize = 8;
+              *d++ = 0;
+              d = write_extval(0,1,db,d,op,rtype);
+              if (typechk && (op->extval[0]<-0x80 || op->extval[0]>0xff))
                 cpu_error(36);  /* immediate operand out of range */
             }
             else
               cpu_error(37);  /* immediate operand has illegal type */
-            *d++ = 0;
-            *d++ = ev & 0xff;
-            roffs += 8;
-            rsize = 8;
             break;
           case 'w':
             if (f == FL_Exp) {
-              if (typechk && (ev<-0x8000 || ev>0xffff))
+              rsize = 16;
+              d = write_extval(0,2,db,d,op,rtype);
+              if (typechk && (op->extval[0]<-0x8000 || op->extval[0]>0xffff))
                 cpu_error(36);  /* immediate operand out of range */
             }
             else
               cpu_error(37);  /* immediate operand has illegal type */
-            d = setval(1,d,2,ev);
-            rsize = 16;
             break;
           case 'l':
-            if (f != FL_Exp)
+            if (f == FL_Exp) {
+              rsize = 32;
+              d = write_extval(0,4,db,d,op,rtype);
+            }
+            else
               cpu_error(37);  /* immediate operand has illegal type */
-            d = setval(1,d,4,ev);
-            rsize = 32;
             break;
           case 's':
             if (err = copy_float_exp(d,op,EXT_SINGLE))
@@ -4280,16 +4303,22 @@ static unsigned char *write_ea_ext(dblock *db,unsigned char *d,operand *op,
             d += 12;
             break;
         }
-        if (rsize!=0 && op->base[0]!=NULL)
-          rtype = REL_ABS;
       }
     }
 
-    /* append relocation */
-    if (rtype != REL_NONE)
+    /* append relocations */
+    if (rtype != REL_NONE) {
+      if (rtype==REL_ABS && op->basetype[0]==BASE_PCREL)
+        rtype = REL_PC;
       add_reloc(&db->relocs,op->base[0],op->extval[0],rtype,rsize,roffs);
+    }
+    if (ortype != REL_NONE) {
+      if (ortype==REL_ABS && op->basetype[1]==BASE_PCREL)
+        ortype = REL_PC;
+      add_reloc(&db->relocs,op->base[1],op->extval[1],ortype,orsize,
+                (rtype==REL_NONE) ? roffs : roffs+rsize);
+    }
   }
-
   return d;
 }
 
@@ -4589,15 +4618,16 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
 {
   dblock *db = new_dblock();
   int dtype = op->flags & FL_expMask;
-  taddr val = 0;
   symbol *base = NULL;
+  int btype;
+  taddr val = 0;
 
   db->size = bitsize >> 3;
   db->data = mymalloc(db->size);
   if (dtype==FL_Exp && op->exp.value[0]!=NULL) {
     if (!eval_expr(op->exp.value[0],&val,sec,pc)) {
-      base = find_base(op->exp.value[0],sec,pc);
-      if (base == NULL)
+      btype = find_base(&base,op->exp.value[0],sec,pc);
+      if (btype == BASE_ILLEGAL)
         general_error(38);  /* illegal relocation */
     }
   }
@@ -4678,7 +4708,7 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
 
   if (base) {
     /* relocation required */
-    add_reloc(&db->relocs,base,val,REL_ABS,bitsize,0);
+    add_reloc(&db->relocs,base,val,btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
   }
 
   return db;

@@ -37,7 +37,7 @@ int ext_unary_eval(int type,taddr val,taddr *result,int cnst)
 }
 
 
-symbol *ext_find_base(expr *p,section *sec,taddr pc)
+int ext_find_base(symbol **base,expr *p,section *sec,taddr pc)
 {
   /* addr/256 equals >addr, addr%256 and addr&255 equal <addr */
   if (p->type==DIV || p->type==MOD) {
@@ -49,10 +49,10 @@ symbol *ext_find_base(expr *p,section *sec,taddr pc)
 
   if (p->type==LOBYTE || p->type==HIBYTE) {
     modifier = p->type;
-    return find_base(p->left,sec,pc);
+    return find_base(base,p->left,sec,pc);
   }
   modifier = 0;
-  return 0;
+  return BASE_ILLEGAL;
 }
 
 
@@ -175,7 +175,7 @@ static void optimize_instruction(instruction *ip,section *sec,
       else {
         symbol *base;
         
-        if (base = find_base(op->value,sec,pc)) {
+        if (find_base(&base,op->value,sec,pc) == BASE_OK) {
           if (op->type==REL && base->type==LABSYM && base->sec==sec) {
             taddr bd = val - (pc + 2);
     
@@ -293,7 +293,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
     if (op->value != NULL) {
       if (!eval_expr(op->value,&val,sec,pc)) {
         modifier = 0;
-        if (base = find_base(op->value,sec,pc)) {
+        if (find_base(&base,op->value,sec,pc) == BASE_OK) {
           if (optype==REL && base->type==LABSYM && base->sec==sec) {
             /* relative branch requires no relocation */
             val = val - (pc + 2);
@@ -400,11 +400,14 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
   db->data = mymalloc(db->size);
   if (!eval_expr(op->value,&val,sec,pc)) {
     symbol *base;
+    int btype;
     rlist *rl;
     
     modifier = 0;
-    if (base = find_base(op->value,sec,pc)) {
-      rl = add_reloc(&db->relocs,base,val,REL_ABS,bitsize,0);
+    btype = find_base(&base,op->value,sec,pc);
+    if (btype==BASE_OK || (btype==BASE_PCREL && modifier==0)) {
+      rl = add_reloc(&db->relocs,base,val,
+                     btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
       switch (modifier) {
         case LOBYTE:
           ((nreloc *)rl->reloc)->mask = 0xff;

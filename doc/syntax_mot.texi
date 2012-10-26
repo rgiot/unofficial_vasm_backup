@@ -3,7 +3,7 @@ M68k family of CPUs, which is available with the extension @code{mot}.
 
 @section Legal
 
-    This module is copyright in 2002-2011 by Frank Wille.
+    This module is copyright in 2002-2012 by Frank Wille.
 
     This archive may be redistributed without modifications and used
     for non-commercial purposes.
@@ -352,11 +352,13 @@ CPU- and output-module support them):
       Conditionally assemble the following lines if <expression> is
       less than zero or equal.
 
-@item ifd <symbol>
-      Conditionally assemble the following lines if <symbol> is defined.
+@item ifb <operand>
+      Conditionally assemble the following lines when <operand> is
+      completely blank, except an optional comment.
 
-@item ifnd <symbol>
-      Conditionally assemble the following lines if <symbol> is undefined.
+@item ifnb <operand>
+      Conditionally assemble the following lines when <operand> is
+      non-blank.
 
 @item ifc <string1>,<string2>
       Conditionally assemble the following lines if <string1> matches
@@ -365,6 +367,12 @@ CPU- and output-module support them):
 @item ifnc <string1>,<string2>
       Conditionally assemble the following lines if <string1> does not
       match <string2>.
+
+@item ifd <symbol>
+      Conditionally assemble the following lines if <symbol> is defined.
+
+@item ifnd <symbol>
+      Conditionally assemble the following lines if <symbol> is undefined.
 
 @item incbin <file>
       Inserts the binary contents of <file> into the object code at

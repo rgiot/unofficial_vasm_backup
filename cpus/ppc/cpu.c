@@ -432,23 +432,31 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
     nreloc *r = new_nreloc();
     nreloc *r2;
     rlist *rl = mymalloc(sizeof(rlist));
+    int btype = find_base(&r->sym,op->value,sec,pc);
 
-    rl->type = reloctype;
-    if (op->mode != OPM_NONE) {
-      if (!valid_hiloreloc(reloctype))  /* check if reloc allows @ha/@h/@l */
-        op->mode = OPM_NONE;
+    if (btype == BASE_PCREL) {
+      if (reloctype == REL_ABS)
+        reloctype = REL_PC;
+      else
+        goto illreloc;
     }
 
-    if (r->sym = find_base(op->value,sec,pc)) {
-      if (reloctype==REL_PC) {
+    if (btype != BASE_ILLEGAL) {
+      rl->type = reloctype;
+      if (op->mode != OPM_NONE) {
+        if (!valid_hiloreloc(reloctype))  /* check if reloc allows @ha/@h/@l */
+          op->mode = OPM_NONE;
+      }
+
+      if (reloctype == REL_PC) {
         /* a relative branch - reloc is only needed for external reference */
-        if (r->sym->type == LABSYM && r->sym->sec == sec) {
+        if (r->sym->type==LABSYM && r->sym->sec==sec) {
           myfree(rl);
           myfree(r);
           return val-pc;
         }
       }
-      r->addend = val;
+
       if (r2 = get_reloc_size(r,op)) {
         /* a second relocation for @ha is required */
         rlist *rl2 = mymalloc(sizeof(rlist));
@@ -462,9 +470,18 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
       rl->reloc = r;
       rl->next = *reloclist;
       *reloclist = rl;
+
+      if (btype == BASE_PCREL)
+        r->addend = val + (r->offset >> 3);
+      else
+        r->addend = val;
     }
-    else
+    else {
+illreloc:
+      myfree(rl);
+      myfree(r);
       general_error(38);  /* illegal relocation */
+    }
   }
 
   return val;

@@ -698,7 +698,7 @@ int ext_unary_eval(int type,taddr val,taddr *result,int cnst)
     return 0;  /* unknown type */
 }
 
-symbol *ext_find_base(expr *p,section *sec,taddr pc)
+int ext_find_base(symbol **base,expr *p,section *sec,taddr pc)
 {
     if ( p->type==DIV || p->type ==MOD) {
         if (p->right->type == NUM && p->right->c.val == 256 ) {
@@ -709,10 +709,10 @@ symbol *ext_find_base(expr *p,section *sec,taddr pc)
     }
     if (p->type==LOBYTE || p->type==HIBYTE) {
         modifier = p->type;
-        return find_base(p->left,sec,pc);
+        return find_base(base,p->left,sec,pc);
     }
     modifier = 0;
-    return 0;
+    return BASE_ILLEGAL;
 }
                                                 
 
@@ -1485,7 +1485,7 @@ static void write_opcode(mnemonic *opcode, dblock *db, int size, section *sec, t
             symbol *base;
             rlist *rl;
             modifier = 0;
-            if ( base = find_base(indexit->value, sec, pc) ) {
+            if ( find_base(&base, indexit->value, sec, pc) == BASE_OK ) {
                 rl = add_reloc(&db->relocs, base, val, REL_ABS, 8,
                                cbmode ? ((d-1)-start)*8 : (d-start)*8);
                 val = apply_modifier((nreloc *)rl->reloc, val);
@@ -1511,7 +1511,7 @@ static void write_opcode(mnemonic *opcode, dblock *db, int size, section *sec, t
             symbol *base;
             rlist *rl;
             modifier = 0;
-            if ( base = find_base(expr, sec, pc) ) {
+            if ( find_base(&base, expr, sec, pc) == BASE_OK ) {
                 if ( opcode->ext.mode == TYPE_RELJUMP ) {
                     add_reloc(&db->relocs, base, val -1, REL_PC, exprsize * 8, (d - start) * 8);
                     val -= (pc + db->size);
@@ -1592,8 +1592,8 @@ static void rabbit_emu_call(instruction *ip,dblock *db,section *sec,taddr pc)
         /* Create a temporary expression */
         expr = parse_expr(&t_expr);
         if ( eval_expr(expr, &val, sec, pc) == 0 ) {
-            symbol *base = find_base(expr,sec,pc);
-            if (base)
+            symbol *base;
+            if ( find_base(&base, expr, sec, pc) == BASE_OK )
                 add_reloc(&db->relocs,base, val, REL_ABS, 8, (d - start) * 8);
             else
                 general_error(38);  /* illegal relocation */
@@ -1605,8 +1605,8 @@ static void rabbit_emu_call(instruction *ip,dblock *db,section *sec,taddr pc)
     *d++ = 0xcd;  /* call */
     /* Evaluate the real expression */
     if ( eval_expr(ip->op[1]->value, &val, sec, pc) == 0 ) {
-        symbol *base = find_base(ip->op[1]->value,sec,pc);
-        if (base)
+        symbol *base;
+        if ( find_base(&base, ip->op[1]->value, sec, pc) == BASE_OK )
             add_reloc(&db->relocs,base, val, REL_ABS, 8, (d - start) * 8);
         else
             general_error(38);  /* illegal relocation */
@@ -1642,11 +1642,14 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
     db->data = mymalloc(db->size);
     if (!eval_expr(op->value,&val,sec,pc)) {
         symbol *base;
+        int btype;
         rlist *rl;
 
         modifier = 0;
-        if (base = find_base(op->value,sec,pc)) {
-            rl = add_reloc(&db->relocs,base,val,REL_ABS,bitsize,0);
+        btype = find_base(&base, op->value, sec, pc);
+        if ( btype == BASE_OK || ( btype == BASE_PCREL && modifier == 0 ) ) {
+            rl = add_reloc(&db->relocs, base, val,
+                           btype==BASE_PCREL ? REL_PC : REL_ABS, bitsize, 0);
             val = apply_modifier((nreloc *)rl->reloc,val);
         }
         else
@@ -1713,8 +1716,8 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
                     /* Create a temporary expression */
                     expr = parse_expr(&bufptr);
                     if ( eval_expr(expr, &val, sec, pc) == 0 ) {
-                        symbol *base = find_base(expr,sec,pc);
-                        if (base)
+                        symbol *base;
+                        if (find_base(&base,expr,sec,pc) == BASE_OK)
                             add_reloc(&db->relocs,base, val, REL_ABS, 8,  8);
                         else
                             general_error(38);  /* illegal relocation */

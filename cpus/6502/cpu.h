@@ -33,13 +33,13 @@ typedef int16_t taddr;
 
 /* we define two additional unary operations, '<' and '>' */
 int ext_unary_eval(int,taddr,taddr *,int);
-symbol *ext_find_base(expr *,section *,taddr);
+int ext_find_base(symbol **,expr *,section *,taddr);
 #define LOBYTE (LAST_EXP_TYPE+1)
 #define HIBYTE (LAST_EXP_TYPE+2)
 #define EXT_UNARY_NAME(s) (*s=='<'||*s=='>')
 #define EXT_UNARY_TYPE(s) (*s=='<'?LOBYTE:HIBYTE)
 #define EXT_UNARY_EVAL(t,v,r,c) ext_unary_eval(t,v,r,c)
-#define EXT_FIND_BASE(e,s,p) ext_find_base(e,s,p)
+#define EXT_FIND_BASE(b,e,s,p) ext_find_base(b,e,s,p)
 
 /* type to store each operand */
 typedef struct {

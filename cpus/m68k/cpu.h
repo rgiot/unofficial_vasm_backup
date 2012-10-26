@@ -95,10 +95,11 @@ int m68k_data_operand(int);
 typedef struct {
   signed char mode;
   signed char reg;
-  uint16_t flags;
   uint16_t format;            /* used for (d8,An/PC,Rn) and ext.addr.modes */
   unsigned char bf_offset;    /* bitfield offset, k-factor or MAC Upper Word */
   unsigned char bf_width;     /* bitfield width or MAC-MASK '&' */
+  int8_t basetype[2];         /* BASE_OK=normal, BASE=PCREL=pc-relative base */
+  uint32_t flags;
   union {
     expr *value[2];           /* immediate, abs. or displacem. expression */
     unsigned char *cint;      /* 64-bit or 96-bit constant in big-endian */

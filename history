@@ -6,6 +6,9 @@ o New instruction/operand parser. Can handle instruction availability,
   depending on selected cpu-type, and optional operands in common code.
 o Now using the faster djb2 hash table algorithm. Tuned hash table sizes
   for PPC, M68k and x86. Bigger symbol and macro hash tables.
+o Symbol distances from two different sections are supported, when the
+  second symbol comes from the current section, by using a pc-relative
+  relocation with an appropriate addend.
 o The vasm core supports named arguments of the form "\identifier". It
   can be enabled by syntax modules on demand.
 o "\@?" can be used in a macro to push the current id below the top item
@@ -43,6 +46,8 @@ o mot-syntax: Although ignored, load, jumpptr and jumperr should accept
   non-constant expressions.
 o mot-syntax: Internal symbol REPTN can be used as iteration counter in
   the inner repeat loop.
+o mot-syntax: New directives: IFB and IFNB to check whether a macro argument
+  is blank or non-blank.
 o oldstyle-syntax: Enabled support for named macro arguments.
 o oldstyle-syntax: Fixed detection of endmac, endmacro, endrep and endrepeat.
 o oldstyle-syntax: Conditional directives also allow non-constant expressions,
@@ -68,6 +73,8 @@ o std-syntax: Allow non-constant expressions for conditional directives,
 o std-syntax: print a warning when alignment is too big.
 o std-syntax: .list and .nolist directives to control listing file output.
 o std-syntax: Enabled support for named macro arguments.
+o std-syntax: New directives: .ifb and .ifnb to check whether a macro
+  argument is blank or non-blank.
 
 - 1.5c (10.12.11)
 o Define a __VASM symbol to identify the assembler.

@@ -752,6 +752,18 @@ static void handle_ifnd(char *s)
   ifdef(s,0);
 }
 
+static void handle_ifb(char *s)
+{
+  s = skip(s);
+  cond[++clev] = (*s=='\0' || *s==commentchar);
+}
+
+static void handle_ifnb(char *s)
+{
+  s = skip(s);
+  cond[++clev] = (*s!='\0' && *s!=commentchar);
+}
+
 static void ifexp(char *s,int c)
 {
   expr *condexp = parse_expr_tmplab(&s);
@@ -981,6 +993,8 @@ struct {
   "endm",handle_endm,
   "ifdef",handle_ifd,
   "ifndef",handle_ifnd,
+  "ifb",handle_ifb,
+  "ifnb",handle_ifnb,
   "if",handle_ifne,
   "ifeq",handle_ifeq,
   "ifne",handle_ifne,

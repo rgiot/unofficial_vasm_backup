@@ -1,5 +1,5 @@
 /* expr.c expression handling for vasm */
-/* (c) in 2002-2011 by Volker Barthelmann */
+/* (c) in 2002-2012 by Volker Barthelmann */
 
 #include "vasm.h"
 
@@ -597,13 +597,20 @@ int eval_expr(expr *tree,taddr *result,section *sec,taddr pc)
     val=(lval+rval);
     break;
   case SUB:
-    val=(lval-rval);
+    find_base(&lsym,tree->left,sec,pc);
+    find_base(&rsym,tree->right,sec,pc);
     /* l2-l1 is constant when both have a valid symbol-base, and both
        symbols are LABSYMs from the same section, e.g. (sym1+x)-(sym2-y) */
-    if(cnst==0&&
-       (lsym=find_base(tree->left,sec,pc))&&
-       (rsym=find_base(tree->right,sec,pc)))
+    if(cnst==0&&lsym!=NULL&&rsym!=NULL)
        cnst=lsym->type==LABSYM&&rsym->type==LABSYM&&lsym->sec==rsym->sec;
+    /* Difference between symbols from different section or between an
+       external symbol and a symbol from the current section can be
+       represented by a REL_PC, so we calculate the addend. */
+    if(lsym!=NULL&&rsym!=NULL&&rsym->type==LABSYM&&rsym->sec==sec&&
+       ((lsym->type==LABSYM&&lsym->sec!=rsym->sec)||lsym->type==IMPORT))
+      val=(pc-rval+lval-lsym->sec->org);
+    else
+      val=(lval-rval);
     break;
   case MUL:
     val=(lval*rval);
@@ -716,35 +723,49 @@ void print_expr(FILE *f,expr *p)
 /* Tests, if an expression is based only on one non-absolute
    symbol plus constants. Returns that symbol or zero.
    Note: Does not find all possible solutions. */
-symbol *find_base(expr *p,section *sec,taddr pc)
+int find_base(symbol **base,expr *p,section *sec,taddr pc)
 {
-  symbol *sym;
+  if(base)
+    *base=NULL;
   if(p->type==SYM){
     if(p->c.sym==cpc&&sec!=NULL){
       cpc->sec=sec;
       cpc->pc=pc;
     }
     if(p->c.sym->type==EXPRESSION)
-      return find_base(p->c.sym->expr,sec,pc);
-    else
-      return p->c.sym;
+      return find_base(base,p->c.sym->expr,sec,pc);
+    else{
+      if(base)
+        *base=p->c.sym;
+      return BASE_OK;
+    }
   }
   if(p->type==ADD){
     taddr val;
-    if(eval_expr(p->left,&val,sec,pc)&&(sym=find_base(p->right,sec,pc)))
-      return sym;
-    if(eval_expr(p->right,&val,sec,pc)&&(sym=find_base(p->left,sec,pc)))
-      return sym;
+    if(eval_expr(p->left,&val,sec,pc)&&
+       find_base(base,p->right,sec,pc)==BASE_OK)
+      return BASE_OK;
+    if(eval_expr(p->right,&val,sec,pc)&&
+       find_base(base,p->left,sec,pc)==BASE_OK)
+      return BASE_OK;
   }
   if(p->type==SUB){
     taddr val;
-    if(eval_expr(p->right,&val,sec,pc)&&(sym=find_base(p->left,sec,pc)))
-      return sym;
+    symbol *pcsym;
+    if(eval_expr(p->right,&val,sec,pc)&&
+       find_base(base,p->left,sec,pc)==BASE_OK)
+      return BASE_OK;
+    if(find_base(base,p->left,sec,pc)==BASE_OK&&
+       find_base(&pcsym,p->right,sec,pc)==BASE_OK) {
+      if(pcsym->type==LABSYM&&pcsym->sec==sec&&
+         ((*base)->type==LABSYM||(*base)->type==IMPORT))
+        return BASE_PCREL;
+    }
   }
 #ifdef EXT_FIND_BASE
-  return EXT_FIND_BASE(p,sec,pc);
+  return EXT_FIND_BASE(base,p,sec,pc);
 #else
-  return 0;
+  return BASE_ILLEGAL;
 #endif
 }
 

@@ -611,16 +611,17 @@ taddr eval_thumb_operands(instruction *ip,section *sec,taddr pc,
   for (opcnt=0; ip->op[opcnt]!=NULL && opcnt<MAX_OPERANDS; opcnt++) {
     taddr val;
     symbol *base = NULL;
+    int btype;
 
     op = *(ip->op[opcnt]);
     if (!eval_expr(op.value,&val,sec,pc))
-      base = find_base(op.value,sec,pc);
+      btype = find_base(&base,op.value,sec,pc);
 
     /* do optimizations first */
 
     if (op.type==TPCLW || THBRANCH(op.type)) {
       /* PC-relative offsets (take prefetch into account: PC+4) */
-      if (base) {
+      if (base!=NULL && btype==BASE_OK) {
         if (base->type==LABSYM && base->sec==sec) {
           /* no relocation required, can be resolved immediately */
           if (op.type == TPCLW) {
@@ -788,12 +789,16 @@ taddr eval_thumb_operands(instruction *ip,section *sec,taddr pc,
         }
 
         if (base!=NULL && db!=NULL) {
-          if (op.type==TUIM5 || op.type==TUI5I)
-            addmaskedreloc(&db->relocs,base,val,REL_ABS,5,5,0x1f);
-          else if (op.type == TSWI8)
-            addmaskedreloc(&db->relocs,base,val,REL_ABS,8,8,0xff);
+          if (btype == BASE_OK) {
+            if (op.type==TUIM5 || op.type==TUI5I)
+              addmaskedreloc(&db->relocs,base,val,REL_ABS,5,5,0x1f);
+            else if (op.type == TSWI8)
+              addmaskedreloc(&db->relocs,base,val,REL_ABS,8,8,0xff);
+            else
+              cpu_error(6);  /* constant integer expression required */
+          }
           else
-            cpu_error(6);  /* constant integer expression required */
+            general_error(38);  /* illegal relocation */
         }
       }
 
@@ -1086,17 +1091,18 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
   for (opcnt=0; ip->op[opcnt]!=NULL && opcnt<MAX_OPERANDS; opcnt++) {
     taddr val;
     symbol *base = NULL;
+    int btype;
 
     op = *(ip->op[opcnt]);
     if (!eval_expr(op.value,&val,sec,pc))
-      base = find_base(op.value,sec,pc);
+      btype = find_base(&base,op.value,sec,pc);
 
     /* do optimizations first */
 
     if (op.type==PCL12 || op.type==PCLRT ||
         op.type==PCLCP || op.type==BRA24) {
       /* PC-relative offsets (take prefetch into account: PC+8) */
-      if (base) {
+      if (base!=NULL && btype==BASE_OK) {
         if (base->type==LABSYM && base->sec==sec) {
           /* no relocation required, can be resolved immediately */
           val -= pc + 8;
@@ -1274,10 +1280,11 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
     }
 
     else if (op.type == IMROT) {
+      op.type = NOOP;  /* is handled here */
+
       if (base == NULL) {
         uint32_t rotval;
 
-        op.type = NOOP;  /* is handled here */
         if ((rotval = rotated_immediate(val)) != ROTFAIL) {
           if (insn)
             *insn |= rotval;
@@ -1376,17 +1383,21 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
           *insn |= 0x00800000;  /* set UP-flag */
 
         if (base) {
-          if (base->type == IMPORT) {
-            if (!aa4ldst) {
-              /* @@@ does this make any sense? */
-              *insn |= 0x00800000;  /* only UP */
-              addmaskedreloc(&db->relocs,base,val,REL_ABS,20,12,0xfff);
+          if (btype == BASE_OK) {
+            if (base->type == IMPORT) {
+              if (!aa4ldst) {
+                /* @@@ does this make any sense? */
+                *insn |= 0x00800000;  /* only UP */
+                addmaskedreloc(&db->relocs,base,val,REL_ABS,20,12,0xfff);
+              }
+              else
+                cpu_error(22); /* operation not allowed on external symbols */
             }
             else
-              cpu_error(22); /* operation not allowed on external symbols */
+              cpu_error(6);  /* constant integer expression required */
           }
           else
-            cpu_error(6);  /* constant integer expression required */
+            general_error(38);  /* illegal relocation */
         }
       }
 
@@ -1588,10 +1599,13 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
   db->data = mymalloc(db->size);
 
   if (!eval_expr(op->value,&val,sec,pc)) {
-    symbol *base = find_base(op->value,sec,pc);
+    symbol *base;
+    int btype;
 
+    btype = find_base(&base,op->value,sec,pc);
     if (base)
-      add_reloc(&db->relocs,base,val,REL_ABS,bitsize,0);
+      add_reloc(&db->relocs,base,val,
+                btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
     else
       general_error(38);  /* illegal relocation */
   }

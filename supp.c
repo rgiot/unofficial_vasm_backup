@@ -51,18 +51,21 @@ struct node *remhead(struct list *l)
 
 void *mymalloc(size_t sz)
 {
-#if DEBUG
-  size_t *p = malloc(sz+2*sizeof(size_t));
-  if (!p)
-    general_error(17);
-  p++;
-  *p++ = sz;
-  memset(p,0xdd,sz);  /* make it crash, when using uninitialized memory */
-#else
-  void *p = malloc(sz);
-  if(!p)
-    general_error(17);
-#endif
+  size_t *p;
+
+  if (debug) {
+    p = malloc(sz+2*sizeof(size_t));
+    if (!p)
+      general_error(17);
+    p++;
+    *p++ = sz;
+    memset(p,0xdd,sz);  /* make it crash, when using uninitialized memory */
+  }
+  else {
+    p = malloc(sz);
+    if(!p)
+      general_error(17);
+  }
   return p;
 }
 
@@ -78,17 +81,20 @@ void *mycalloc(size_t sz)
 
 void *myrealloc(void *old,size_t sz)
 {
-#if DEBUG
-  size_t *p = realloc(old?((size_t *)old)-2:0,sz+2*sizeof(size_t));
-  if (!p)
-    general_error(17);
-  p++;
-  *p++ = sz;
-#else
-  void *p = realloc(old,sz);
-  if (!p)
-    general_error(17);
-#endif
+  size_t *p;
+
+  if (debug) {
+    p = realloc(old?((size_t *)old)-2:0,sz+2*sizeof(size_t));
+    if (!p)
+      general_error(17);
+    p++;
+    *p++ = sz;
+  }
+  else {
+    p = realloc(old,sz);
+    if (!p)
+      general_error(17);
+  }
   return p;
 }
 
@@ -96,14 +102,14 @@ void *myrealloc(void *old,size_t sz)
 void myfree(void *p)
 {
   if (p) {
-#if DEBUG
-    size_t *myp = (size_t *)p;
-    size_t sz = *(--myp);
-    memset(p,0xff,sz);  /* make it crash, when reusing deallocated memory */
-    free(--myp);
-#else
-    free(p);
-#endif
+    if (debug) {
+      size_t *myp = (size_t *)p;
+      size_t sz = *(--myp);
+      memset(p,0xff,sz);  /* make it crash, when reusing deallocated memory */
+      free(--myp);
+    }
+    else
+      free(p);
   }
 }
 

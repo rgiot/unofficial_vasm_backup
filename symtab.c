@@ -61,7 +61,7 @@ void add_hashentry(hashtable *ht,char *name,hashdata data)
   hashentry *new=mymalloc(sizeof(*new));
   new->name=name;
   new->data=data;
-  if(DEBUG){
+  if(debug){
     if(ht->entries[i])
       ht->collisions++;
   }

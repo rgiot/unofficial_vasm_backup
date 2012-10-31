@@ -25,7 +25,7 @@ int ignore_multinc;
 int nocase;
 int no_symbols;
 int pic_check;
-int done,final_pass;
+int done,final_pass,debug;
 int listena,listformfeed=1,listlinesperpage=40,listnosyms;
 listing *first_listing,*last_listing,*cur_listing;
 char *output_format="test";
@@ -78,7 +78,7 @@ void leave(void)
       remove(outname);
   }
 
-  if(DEBUG){
+  if(debug){
     fprintf(stdout,"Sections:\n");
     for(sec=first_section;sec;sec=sec->next)
       print_section(stdout,sec);
@@ -112,7 +112,7 @@ static void resolve_section(section *sec)
       general_error(7,sec->name);
       break;
     }
-    if(DEBUG)
+    if(debug)
       printf("resolve_section(%s) pass %d\n",sec->name,pass);
     sec->pc=sec->org;
     for(p=sec->first;p;p=p->next){
@@ -141,7 +141,7 @@ static void resolve_section(section *sec)
         if(label->type!=LABSYM)
           ierror(0);
         if(label->pc!=sec->pc){
-          if(DEBUG)
+          if(debug)
             printf("changing label %s from %lu to %lu\n",label->name,
                    (unsigned long)label->pc,(unsigned long)sec->pc);
           done=0;
@@ -151,7 +151,7 @@ static void resolve_section(section *sec)
       size=atom_size(p,sec,sec->pc);
 #if CHECK_ATOMSIZE
       if(size!=p->lastsize){
-        if(DEBUG)
+        if(debug)
           printf("changed size of atom type %d at %lu from %ld to %ld\n",
                  p->type,(unsigned long)sec->pc,(long)p->lastsize,(long)size);
         done=0;
@@ -167,7 +167,7 @@ static void resolve(void)
 {
   section *sec;
   final_pass=0;
-  if(DEBUG)
+  if(debug)
     printf("resolve()\n");
   for(sec=first_section;sec;sec=sec->next)
     resolve_section(sec);
@@ -221,7 +221,7 @@ static void assemble(void)
         if(pic_check)
           do_pic_check(db->relocs);
         cur_listing=0;
-        if(DEBUG){
+        if(debug){
           if(db->size!=instruction_size(p->content.inst,sec,sec->pc))
             ierror(0);
         }
@@ -340,7 +340,7 @@ static int init_main(void)
       i++;
     }while(i<mnemonic_cnt&&!strcmp(last,mnemonics[i].name));
   }
-  if(DEBUG){
+  if(debug){
     if(mnemohash->collisions)
       printf("*** %d mnemonic collisions!!\n",mnemohash->collisions);
   }
@@ -365,6 +365,10 @@ int main(int argc,char **argv)
     }
     if(!strcmp("-quiet",argv[i])){
       verbose=0;
+      argv[i][0]=0;
+    }
+    if(!strcmp("-debug",argv[i])){
+      debug=1;
       argv[i][0]=0;
     }
   }

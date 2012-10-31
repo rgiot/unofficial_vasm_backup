@@ -240,6 +240,11 @@ See @code{.string}.
 @item .nolist
       The following lines will not be visible in a listing file.
 
+@item .org <exp>
+      Defines the start address for the subsequent code.
+      When <exp> starts with a current-pc symbol and a plus (@code{+})
+      operator, then the directive behaves like @code{.space}.
+
 @item .quad <exp1>[,<exp2>...]
       If the current section location counter is not on a quadword
       boundary, advance it to the next quadword boundary. Then, assign

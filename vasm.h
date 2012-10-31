@@ -8,10 +8,6 @@
 #include <ctype.h>
 #include <string.h>
 
-#ifndef DEBUG
-#define DEBUG 0
-#endif
-
 typedef struct symbol symbol;
 typedef struct section section;
 typedef struct dblock dblock;
@@ -192,6 +188,8 @@ extern unsigned long long taddrmask;
 #define UNS_TADDR(x) (((unsigned long long)x)&taddrmask)
 
 /* provided by main assembler module */
+extern int debug;
+
 void leave(void);
 void fail(char *);
 void set_default_output_format(char *);
@@ -231,6 +229,8 @@ extern int bytespertaddr;
 extern mnemonic mnemonics[];
 extern char *cpu_copyright;
 extern char *cpuname;
+extern int debug;
+
 int init_cpu();
 int cpu_args(char *);
 char *parse_cpu_special(char *);
@@ -261,6 +261,7 @@ extern char *syntax_copyright;
 extern char commentchar;
 extern char *defsectname;
 extern char *defsecttype;
+
 int init_syntax();
 int syntax_args(char *);
 void parse(void);

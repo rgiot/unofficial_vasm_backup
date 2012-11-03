@@ -21,7 +21,9 @@ o Support for relocated origin blocks (RORG-blocks) in absolute output,
 o Only produce a listing file when -L option is given. A nolist directive at
   the end of the source will not prevent writing of a listing file anymore.
 o m68k: B<cc> *+$80 is now optimized to B<cc>.B as well, because the
-  instruction will be 2 bytes smaller after that.
+  instruction will be 2 bytes smaller after that. Fall back to *+$7e
+  optimization, when we need too many passes due to oscillating instruction
+  sizes. Usually caused by an alignment directive before the destination label.
 o m68k: Optimize CMP.W #0,An to TST.L An (TST.W An was wrong!).
 o m68k: New optimization: DIVU/DIVS.L #x,Dn can be optimized into LSR/ASR
   when x is a power of 2 and between 2 and 256. Negative values are handled

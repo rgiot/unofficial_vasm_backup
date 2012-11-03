@@ -24,7 +24,7 @@ struct cpu_models models[] = {
 int model_cnt = sizeof(models)/sizeof(models[0]);
 
 
-char *cpu_copyright="vasm M68k/CPU32/ColdFire cpu backend 1.3b (c) 2002-2012 Frank Wille";
+char *cpu_copyright="vasm M68k/CPU32/ColdFire cpu backend 1.3c (c) 2002-2012 Frank Wille";
 char *cpuname = "M68k";
 int bitsperbyte = 8;
 int bytespertaddr = 4;
@@ -3492,7 +3492,10 @@ dontswap:
             else
               ip->qualifiers[0] = w_str;
           }
-          else if (diff>=-0x80 && diff<=0x80) {
+          else if (diff>=-0x80 && diff<=0x80 && !(sec->flags&RESOLVE_WARN)) {
+            ip->qualifiers[0] = b_str;
+          }
+          else if (diff>=-0x80 && diff<=0x7e && (sec->flags&RESOLVE_WARN)) {
             ip->qualifiers[0] = b_str;
           }
           else if (diff<-0x8000 || diff>0x7fff) {

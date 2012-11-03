@@ -108,12 +108,16 @@ static void resolve_section(section *sec)
   taddr size;
   do{
     done=1;
+    if(debug)
+      printf("resolve_section(%s) pass %d\n",sec->name,pass);
     if (++pass>=MAXPASSES){
       general_error(7,sec->name);
       break;
+    }else if (pass>=MAXPASSES/2){
+      if(debug&&!(sec->flags&RESOLVE_WARN))
+        printf("setting resolve-warning flag\n");
+      sec->flags|=RESOLVE_WARN;
     }
-    if(debug)
-      printf("resolve_section(%s) pass %d\n",sec->name,pass);
     sec->pc=sec->org;
     for(p=sec->first;p;p=p->next){
       sec->pc=(sec->pc+p->align-1)/p->align*p->align;

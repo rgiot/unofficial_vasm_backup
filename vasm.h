@@ -128,6 +128,7 @@ struct symbol {
 
 /* section flags */
 #define HAS_SYMBOLS 1
+#define RESOLVE_WARN 2
 
 /* section description */
 struct section {

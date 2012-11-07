@@ -606,7 +606,8 @@ int eval_expr(expr *tree,taddr *result,section *sec,taddr pc)
     /* Difference between symbols from different section or between an
        external symbol and a symbol from the current section can be
        represented by a REL_PC, so we calculate the addend. */
-    if(lsym!=NULL&&rsym!=NULL&&rsym->type==LABSYM&&rsym->sec==sec&&
+    if(lsym!=NULL&&rsym!=NULL&&rsym->type==LABSYM&&
+       rsym->sec==sec&&lsym->sec!=NULL&&
        ((lsym->type==LABSYM&&lsym->sec!=rsym->sec)||lsym->type==IMPORT))
       val=(pc-rval+lval-lsym->sec->org);
     else

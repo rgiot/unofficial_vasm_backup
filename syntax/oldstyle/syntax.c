@@ -235,7 +235,7 @@ static void handle_align(char *s)
   taddr a = parse_constexpr(&s);
 
   if (a > 63)
-    syntax_error(22);  /* bad alignment */
+    syntax_error(21);  /* bad alignment */
   do_alignment(1LL<<a,number_expr(0));
   eol(s);
 }
@@ -564,25 +564,24 @@ static void handle_endif(char *s)
 
 static void handle_assert(char *s)
 {
-  char *exp,*msg=NULL;
+  char *expstr,*msgstr;
   size_t explen;
+  expr *aexp;
+  atom *a;
 
-  exp = skip(s);
-  s = ifexp(s,1);
-  explen = s - exp;
-
-  if (cond[clev--] == 0) {
-    s = skip(s);
-    if (*s == ',') {
-      s = skip(s+1);
-      msg = parse_name(&s);
-    }
-    exp = cnvstr(exp,explen);
-    syntax_error(21,exp,msg?msg:emptystr);
-    if (msg)
-      myfree(msg);
-    myfree(exp);
+  expstr = skip(s);
+  aexp = parse_expr(&s);
+  explen = s - expstr;
+  s = skip(s);
+  if (*s == ',') {
+    s = skip(s+1);
+    msgstr = parse_name(&s);
   }
+  else
+    msgstr = NULL;
+
+  a = new_assert_atom(aexp,cnvstr(expstr,explen),msgstr);
+  add_atom(0,a);
 }
 
 

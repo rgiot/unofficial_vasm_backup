@@ -20,6 +20,7 @@ o Support for relocated origin blocks (RORG-blocks) in absolute output,
   although the code is still physically placed at the original address.
 o Only produce a listing file when -L option is given. A nolist directive at
   the end of the source will not prevent writing of a listing file anymore.
+o Do not include internal assembler symbols in the object file.
 o m68k: B<cc> *+$80 is now optimized to B<cc>.B as well, because the
   instruction will be 2 bytes smaller after that. Fall back to *+$7e
   optimization, when we need too many passes due to oscillating instruction

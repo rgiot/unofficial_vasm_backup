@@ -1,10 +1,10 @@
 /* output_elf.c ELF output driver for vasm */
-/* (c) in 2002-2011 by Frank Wille */
+/* (c) in 2002-2012 by Frank Wille */
 
 #include "vasm.h"
 #include "output_elf.h"
 #if ELFCPU
-static char *copyright="vasm ELF output module 2.0 (c)2002-2011 Frank Wille";
+static char *copyright="vasm ELF output module 2.1 (c)2002-2012 Frank Wille";
 static int be,cpu;
 static unsigned elfrelsize,shtreloc;
 
@@ -446,7 +446,7 @@ static unsigned build_symbol_table(symbol *first,
 
   if (!no_symbols)  /* symbols with local binding first */
     for (symp=first; symp; symp=symp->next)
-      if (*symp->name!='.' && *symp->name!=' ')  /* ignore local/internal */
+      if (*symp->name!='.' && *symp->name!=' ' && !(symp->flags&VASMINTERN))
         if (symp->type!=IMPORT && !(symp->flags & (EXPORT|WEAK)))
           newsym(symp->name,get_sym_value(symp),get_sym_size(symp),
                  STB_LOCAL,get_sym_info(symp),get_sym_index(symp));
@@ -454,7 +454,7 @@ static unsigned build_symbol_table(symbol *first,
   firstglobal = symindex;  /* now the global and weak symbols */
 
   for (symp=first; symp; symp=symp->next)
-    if (*symp->name != '.')  /* ignore symbols preceded by a '.' */
+    if (*symp->name != '.'  && !(symp->flags&VASMINTERN))
       if ((symp->type!=IMPORT && (symp->flags & (EXPORT|WEAK))) ||
           (symp->type==IMPORT && (symp->flags & (COMMON|WEAK))))
         newsym(symp->name,get_sym_value(symp),get_sym_size(symp),

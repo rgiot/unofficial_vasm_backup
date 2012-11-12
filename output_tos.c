@@ -1,10 +1,10 @@
 /* output_tos.c Atari TOS executable output driver for vasm */
-/* (c) in 2009-2010 by Frank Wille */
+/* (c) in 2009-2012 by Frank Wille */
 
 #include "vasm.h"
 #include "output_tos.h"
 #if defined(VASM_CPU_M68K)
-static char *copyright="vasm tos output module 0.6 (c) 2009-2010 Frank Wille";
+static char *copyright="vasm tos output module 0.7 (c) 2009-2012 Frank Wille";
 
 static int tosflags = 0;
 static int max_relocs_per_atom;
@@ -71,7 +71,7 @@ static int tos_initwrite(section *sec,symbol *sym)
   /* count symbols */
   for (; sym; sym=sym->next) {
     /* ignore symbols preceded by a '.' and internal symbols */
-    if (*sym->name!='.' && *sym->name!=' ') {
+    if (*sym->name!='.' && *sym->name!=' ' && !(sym->flags&VASMINTERN)) {
       nsyms++;
       if (strlen(sym->name) > DRI_NAMELEN)
         nsyms++;  /* extra symbol for long name */
@@ -81,7 +81,7 @@ static int tos_initwrite(section *sec,symbol *sym)
         if (tosflags == 0)  /* not defined by command line? */
           tosflags = (int)get_sym_value(sym);
       }
-      sym->flags |= IGNORE_SYM;
+      sym->flags |= VASMINTERN;
     }
   }
   return no_symbols ? 0 : nsyms;
@@ -240,7 +240,7 @@ static void tos_symboltable(FILE *f,symbol *sym)
   int t;
 
   for (; sym; sym=sym->next) {
-    if (!(sym->flags & IGNORE_SYM)) {
+    if (!(sym->flags & VASMINTERN)) {
       if (sym->type == EXPRESSION)
         t = STYP_EQUATED | STYP_DEFINED;
       else if (sym->type == LABSYM)

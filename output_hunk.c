@@ -1,10 +1,10 @@
 /* output_hunk.c AmigaOS hunk format output driver for vasm */
-/* (c) in 2002-2010 by Frank Wille */
+/* (c) in 2002-2012 by Frank Wille */
 
 #include "vasm.h"
 #include "output_hunk.h"
 #if defined(VASM_CPU_M68K) || defined(VASM_CPU_PPC)
-static char *copyright="vasm hunk format output module 2.2 (c) 2002-2010 Frank Wille";
+static char *copyright="vasm hunk format output module 2.3 (c) 2002-2012 Frank Wille";
 
 static int databss = 0;
 static int exthunk;
@@ -96,7 +96,7 @@ static section *check_symbols(section *first_sec,symbol *sym)
   /* check common symbols */
   for (; sym; sym=sym->next) {
     if (*sym->name == ' ')  /* internal symbol - will be ignored */
-      sym->flags |= INTERNAL_SYM;
+      sym->flags |= VASMINTERN;
     else if ((sym->flags & COMMON) && !(sym->flags & COMM_REFERENCED)) {
       /* create a dummy reference for each unreferenced common symbol */
       dblock *db = new_dblock();
@@ -534,7 +534,7 @@ static void ext_defs(FILE *f,symbol *sym,int symtype,int global,
   int header = 0;
 
   for (; sym; sym=sym->next) {
-    if (!(sym->flags & INTERNAL_SYM)) {
+    if (!(sym->flags & VASMINTERN)) {
       if (sym->type==symtype && (sym->flags&global)==global &&
           (symtype==EXPRESSION ? 1 : sym->sec->idx==idx)) {
         if (!header) {

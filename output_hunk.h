@@ -1,5 +1,5 @@
 /* output_hunk.h header file for AmigaOS hunk format */
-/* (c) in 2002-2009 by Frank Wille */
+/* (c) in 2002-2012 by Frank Wille */
 
 /* hunk-format relocs */
 struct hunkreloc {
@@ -22,6 +22,7 @@ struct hunkxref {
 struct hunkline {
   struct node n;
   uint32_t line;
+
   uint32_t offset;
 };
 
@@ -29,7 +30,6 @@ struct hunkline {
 /* additional symbol flags */
 #define COMM_REFERENCED (RSRVD_O<<0)  /* common symbol was referenced */
 #define SEC_DELETED     (RSRVD_O<<1)  /* this section can be deleted */
-#define INTERNAL_SYM    (RSRVD_O<<2)  /* internal symbol to be ignored */
 
 
 /* Amiga DOS Hunks */

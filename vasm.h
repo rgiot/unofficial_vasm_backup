@@ -110,6 +110,7 @@ struct source {
 #define INEVAL (1<<4)
 #define COMMON (1<<5)
 #define WEAK (1<<6)
+#define VASMINTERN (1<<7)
 #define RSRVD_S (1L<<24)    /* bits 24..27 are reserved for syntax modules */
 #define RSRVD_O (1L<<28)    /* bits 28..31 are reserved for output modules */
 

@@ -45,3 +45,4 @@
   "reloc org was not set",ERROR,
   "macro id insert on empty stack",ERROR,                       /* 45 */
   "bad file-offset argument",ERROR,
+  "assertion \"%s\" failed: %s",ERROR,

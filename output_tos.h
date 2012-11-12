@@ -1,8 +1,5 @@
 /* output_tos.h header file for Atari TOS format */
-/* (c) in 2009 by Frank Wille */
-
-/* symbol flags */
-#define IGNORE_SYM (RSRVD_O<<2)  /* internal symbol to be ignored */
+/* (c) in 2009,2012 by Frank Wille */
 
 /* section index */
 #define _TEXT 0

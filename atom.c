@@ -253,6 +253,7 @@ taddr atom_size(atom *p,section *sec,taddr pc)
     case PRINTEXPR:
     case RORG:
     case RORGEND:
+    case ASSERT:
       return 0;
     case DATA:
       return p->content.db->size;
@@ -340,6 +341,10 @@ void print_atom(FILE *f,atom *p)
       break;
     case RORGEND:
       fprintf(f,"rorg end");
+      break;
+    case ASSERT:
+      fprintf(f,"assert: %s (message: %s)\n",p->content.assert->expstr,
+              p->content.assert->msgstr?p->content.assert->msgstr:emptystr);
       break;
     default:
       ierror(0);
@@ -492,5 +497,20 @@ atom *new_rorgend_atom(void)
   new->next = 0;
   new->type = RORGEND;
   new->align = 1;
+  return new;
+}
+
+
+atom *new_assert_atom(expr *aexp,char *exp,char *msg)
+{
+  atom *new = mymalloc(sizeof(*new));
+
+  new->next = 0;
+  new->type = ASSERT;
+  new->align = 1;
+  new->content.assert = mymalloc(sizeof(*new->content.assert));
+  new->content.assert->assert_exp = aexp;
+  new->content.assert->expstr = exp;
+  new->content.assert->msgstr = msg;
   return new;
 }

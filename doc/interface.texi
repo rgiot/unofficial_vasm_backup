@@ -459,10 +459,22 @@ is automatically appended.
 @item #define PRINTEXPR 9
 Prints the value of an expression during the final assembler pass to stdout.
 
-@item #define RORG 10
+@item #define ROFFS 10
 Set the program counter to an address relative to the section's start
 address. These atoms will be translated into @code{SPACE} atoms in the
 final pass.
+
+@item #define RORG 11
+Assemble this block under the given base address, while the code is still
+written into the original memory region.
+
+@item #define RORGEND 12
+Ends a RORG block and return to the original addessing.
+
+@item #define ASSERT 13
+The assertion expression is checked in the final pass and an error message
+is generated (using the expression string and an optional message out of
+this atom) when it evaluates to 0.
 
 @end table
 

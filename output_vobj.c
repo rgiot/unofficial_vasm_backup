@@ -90,13 +90,15 @@ static void write_string(FILE *f,char *p)
 
 static int sym_valid(symbol *symp)
 {
-/* To ignore internal symbols is dangerous, as some relocations depend on
+/* To ignore tmp-symbols is dangerous, as some relocations depend on
    them (e.g. when using the * (current-pc) symbol, a *tmpNNNNNN* symbol
    will be generated). */
 #if 0
   if(*symp->name==' ')
-    return 0;  /* ignore vasm-internal symbols */
+    return 0;  /* ignore internal/temporary symbols */
 #endif
+  if (symp->flags & VASMINTERN)
+    return 0;  /* ignore vasm-internal symbols */
   return 1;
 }
 

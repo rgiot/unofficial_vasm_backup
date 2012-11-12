@@ -17,6 +17,7 @@
 #define ROFFS 10
 #define RORG 11
 #define RORGEND 12
+#define ASSERT 13
 
 /* a machine instruction */
 typedef struct instruction {
@@ -53,6 +54,12 @@ struct sblock {
   rlist *relocs;
 };
 
+typedef struct assertion {
+  expr *assert_exp;
+  char *expstr;
+  char *msgstr;
+} assertion;
+
 /* an atomic element of data */
 typedef struct atom {
   struct atom *next;
@@ -76,6 +83,7 @@ typedef struct atom {
     expr *pexpr;
     expr *roffs;
     taddr *rorg;
+    assertion *assert;
   } content;
 } atom;
 
@@ -100,5 +108,6 @@ atom *new_expr_atom(expr *);
 atom *new_roffs_atom(expr *);
 atom *new_rorg_atom(taddr);
 atom *new_rorgend_atom(void);
+atom *new_assert_atom(expr *,char *,char *);
 
 #endif

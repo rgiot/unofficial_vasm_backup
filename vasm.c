@@ -275,11 +275,19 @@ static void assemble(void)
 #endif
       else if(p->type==PRINTTEXT)
         printf("%s\n",p->content.ptext);
-      else if (p->type==PRINTEXPR){
+      else if(p->type==PRINTEXPR){
         taddr val;
         eval_expr(p->content.pexpr,&val,sec,sec->pc);
         printf("%ld (0x%lx)\n",(long)val,(unsigned long)val);
       }
+      else if(p->type==ASSERT){
+        assertion *ast=p->content.assert;
+        taddr val;
+        eval_expr(ast->assert_exp,&val,sec,sec->pc);
+        if(val==0)
+          general_error(47,ast->expstr,ast->msgstr?ast->msgstr:emptystr);
+      }
+
       sec->pc+=atom_size(p,sec,sec->pc);
     }
   }
@@ -787,6 +795,8 @@ void print_symbol(FILE *f,symbol *p)
     print_expr(f,p->expr);
     fprintf(f,") ");
   }
+  if(p->flags&VASMINTERN)
+    fprintf(f,"INTERNAL ");
   if(p->flags&EXPORT)
     fprintf(f,"EXPORT ");
   if(p->flags&COMMON)
@@ -941,12 +951,14 @@ symbol *internal_abs(char *name)
 {
   symbol *new = find_symbol(name);
 
-  if(new) {
-    if (new->type!=EXPRESSION || new->flags!=0)
+  if (new) {
+    if (new->type!=EXPRESSION || (new->flags&(EXPORT|COMMON|WEAK)))
       syntax_error(37,name);  /* internal symbol redefined by user */
   }
-  else
+  else {
     new = new_abs(name,number_expr(0));
+    new->flags |= VASMINTERN;
+  }
   return new;
 }
 

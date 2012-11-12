@@ -1,10 +1,10 @@
 /* output_aout.c a.out output driver for vasm */
-/* (c) in 2008-2010 by Frank Wille */
+/* (c) in 2008-2012 by Frank Wille */
 
 #include "vasm.h"
 #include "output_aout.h"
 #if MID
-static char *copyright="vasm a.out output module 0.4 (c) 2008-2010 Frank Wille";
+static char *copyright="vasm a.out output module 0.5 (c) 2008-2012 Frank Wille";
 
 static int mid = MID;
 
@@ -84,8 +84,9 @@ static int aout_getbind(symbol *sym)
 
 
 static unsigned long aoutstd_getrinfo(rlist *rl,int xtern,char *sname,int be)
-/* convert vasm relocation type in standard a.out relocations, */
-/* as used by M68k and x86 targets */
+/* Convert vasm relocation type into standard a.out relocations, */
+/* as used by M68k and x86 targets. */
+/* For xtern=-1, return true when this relocation requires a base symbol. */
 {
   nreloc *nr;
   unsigned long r=0,s=4;
@@ -97,6 +98,8 @@ static unsigned long aoutstd_getrinfo(rlist *rl,int xtern,char *sname,int be)
       case REL_PC: b=RSTDB_pcrel; break;
       case REL_SD: b=RSTDB_baserel; break;
     }
+    if (xtern == -1)  /* just query symbol-based relocation */
+      return b==RSTDB_baserel || b==RSTDB_jmptable;
 
     if ((nr->offset&7)==0 &&
         (nr->mask & MAKEMASK(nr->size)) == MAKEMASK(nr->size)) {
@@ -298,7 +301,7 @@ static void aout_addsymlist(symbol *sym,int bind,int type,int be)
   for (; sym; sym=sym->next) {
     /* ignore symbols preceded by a '.' and internal symbols */
     if ((sym->type!=IMPORT || (sym->flags&WEAK))
-        && *sym->name != '.' && *sym->name!=' ') {
+        && *sym->name != '.' && *sym->name!=' ' && !(sym->flags&VASMINTERN)) {
       int syminfo = aout_getinfo(sym);
       int symbind = aout_getbind(sym);
 
@@ -352,6 +355,9 @@ static unsigned long aout_convert_rlist(int be,atom *a,int secid,
     symbol *refsym = r->sym;
     taddr val = get_sym_value(refsym);
     taddr add = nreloc_real_addend(r);
+#if SDAHACK
+    int based = getrinfo(rl,-1,sections[secid]->name,be) != 0;
+#endif
 
     if (refsym->type == LABSYM) {
       /* this is a local relocation */
@@ -360,7 +366,10 @@ static unsigned long aout_convert_rlist(int be,atom *a,int secid,
       aout_addreloclist(rlst,pc+(r->offset>>3),sectype[rsecid],
                         getrinfo(rl,0,sections[secid]->name,be),
                         be);
-      val += secoffs[rsecid];
+#if SDAHACK
+      if (!based)  /* @@@ 'based' does not really happen in Unix */
+#endif
+        val += secoffs[rsecid];
       rsize += sizeof(struct relocation_info);
     }
     else if (refsym->type == IMPORT) {

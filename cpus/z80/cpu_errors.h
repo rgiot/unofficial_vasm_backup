@@ -19,3 +19,4 @@
     "%s specifier has no effect on the opcode %s",WARNING,
     "Operand value must evaluate to a constant for opcode %s",ERROR,
     "Unhandled operand type wanted 0x%x got 0x%x",ERROR, /* 20 */
+    "Missed matched index registers on %s",ERROR,

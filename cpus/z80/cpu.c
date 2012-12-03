@@ -37,7 +37,7 @@
  * Note: All z80 opcodes work as expected
  */
 mnemonic mnemonics[] = {
-    "adc",  { OP_HL|OP_INDEX|OP_RALT, OP_INDEX|OP_ARITH16 },    { TYPE_ARITH16, 0xed4a, CPU_ZILOG|CPU_RABBIT, F_ALTD },
+    "adc",  { OP_HL|OP_INDEX|OP_RALT, OP_ARITH16 },             { TYPE_ARITH16, 0xed4a, CPU_ZILOG|CPU_RABBIT, F_ALTD },
     "adc",  { OP_REG8|OP_INDEX },                               { TYPE_ARITH8,  0x88, CPU_ALL, F_ALL, 0, 0, RCM_EMU_INCREMENT },
     "adc",  { OP_REG8|OP_INDEX },                               { TYPE_ARITH8,  0x7f88, CPU_RCM4000, F_ALL },
     "adc",  { OP_A|OP_RALT, OP_REG8 | OP_INDEX },               { TYPE_ARITH8,  0x88, CPU_ALL, F_ALTD, 0, 0, RCM_EMU_INCREMENT },
@@ -1840,6 +1840,10 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
     case TYPE_ARITH16:
         if ( opcode->operand_type[1] && (opcode->operand_type[1] & ( OP_ARITH16)) ) {
             offs = (ip->op[1]->reg & REG_PLAIN) * 16;
+            if ( (ip->op[0]->reg & REG_PLAIN) == REG_HL && (ip->op[1]->reg & REG_PLAIN) == REG_HL &&
+                (ip->op[0]->reg & (REG_IX|REG_IY)) != (ip->op[1]->reg & (REG_IX|REG_IY)) ) {
+                cpu_error(21,opcode->name);
+            }
         } else {
             if ( (ip->op[0]->reg & REG_PLAIN) == REG_AF ) {
                 offs = 3 * 16;
@@ -1848,7 +1852,6 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
             }
         }
         reg = ip->op[0]->reg & (REG_IX | REG_IY);
-        /* TODO: Check that ix/iy match on both operands */
         break;
     case TYPE_IDX32:
         offs = 0;

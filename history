@@ -42,6 +42,7 @@ o z80: Fixed crashes and internal errors when an expression creates an
 o z80: Operands in parentheses were not allowed for defining data.
 o z80: A '#' prefix selects hexadecimal radix, as used in some assemblers.
 o z80: Fixed a bug with using invalid register-pairs in some addressing modes.
+o z80: Added the hidden instruction OUT (C),0 (contributed by Romain Giot).
 o 6502: Improved detection of indirect addressing modes. (expr)+(expr) and
   (expr)+expr are no longer indirect.
 o mot-syntax: PhxAss-compatibility mode allows blanks in operands.

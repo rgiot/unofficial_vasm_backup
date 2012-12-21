@@ -20,3 +20,4 @@
     "Operand value must evaluate to a constant for opcode %s",ERROR,
     "Unhandled operand type wanted 0x%x got 0x%x",ERROR, /* 20 */
     "Missed matched index registers on %s",ERROR,
+    "Only out (c),0 is supported for the opcode %s",ERROR,

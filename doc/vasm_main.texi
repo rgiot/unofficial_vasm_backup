@@ -290,6 +290,8 @@ Has to be provided completely by the syntax module.
     @item Miro Kropacek
     @item Mikael Kalms
     @item Matthew Hey
+    @item Romain Giot
+    @item Francois Galea
     @item Tom Duin
     @item Karoly Balogh
 @end itemize

@@ -429,6 +429,7 @@ mnemonic mnemonics[] = {
     "out",  { OP_PORT, OP_REG8},                                { TYPE_MISC8, 0xed41, CPU_ZILOG, 0 },  
     "out",  { OP_PORT       },                                  { TYPE_NONE, 0xed71, CPU_ZILOG, 0 }, /* Undoc out(c) */ 
     "out",  { OP_PORT, OP_F },                                  { TYPE_NONE, 0xed71, CPU_ZILOG, 0 }, /* Undoc out (c),f */
+    "out",  { OP_PORT, OP_NUMBER },                             { TYPE_OUT_C_0, 0xed71, CPU_ZILOG, 0 }, /* Undoc out (c),0 */
     "out",  { OP_ADDR8, OP_A },                                 { TYPE_NONE, 0xD3, CPU_8080|CPU_ZILOG, 0 },   /* out (xx),a */
     "out0", { OP_ADDR8, OP_REG8 },                              { TYPE_MISC8, 0xed01, CPU_Z180|CPU_EZ80, 0 }, /* out0 (xx),r */
 
@@ -1937,6 +1938,15 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
             }
         } else {
             cpu_error(6,opcode->name,val);  /* im out of range */
+            error = 1;
+        }
+        break;
+    case TYPE_OUT_C_0:
+        if ( eval_expr(ip->op[1]->value, &val, sec, pc) == 0 ) {
+            cpu_error(19, opcode->name);
+            error = 1;
+        } else if (val != 0){
+            cpu_error(22,opcode->name);
             error = 1;
         }
         break;

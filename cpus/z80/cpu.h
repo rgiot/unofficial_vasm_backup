@@ -263,3 +263,4 @@ typedef struct {
 #define TYPE_IDX32    0x0c    /* p? * 16 */
 #define TYPE_NOPREFIX 0x0d    /* Don't add on an indexing prefix (RCM) */
 #define TYPE_IDX32R   0x0e    /* p? * 16 + p? * 64*/
+#define TYPE_OUT_C_0  0x0f    /* for out (c), number, number can only be 0 */

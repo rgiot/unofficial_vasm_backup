@@ -467,6 +467,46 @@ static void ifdef(char *s,int b)
 }
 
 
+static void ifused(char *s, int b)
+{
+  char *name;
+  symbol *sym;
+  int result;
+
+  if (!(name = parse_identifier(&s))) {
+      syntax_error(10);  /* identifier expected */
+      return;
+  }
+
+  if (sym = find_symbol(name)) {
+    if (sym->type != IMPORT) {
+      syntax_error(22,name);
+      result = 0;
+    }
+    else
+      result = 1;
+  }
+  else
+    result = 0;
+
+  myfree(name);
+  cond[++clev] = result == b;
+  eol(s);
+}
+
+
+static void handle_ifused(char *s)
+{
+  ifused(s,1);
+}
+
+
+static void handle_ifnused(char *s)
+{
+  ifused(s,0);
+}
+
+
 static void handle_ifd(char *s)
 {
   ifdef(s,1);
@@ -753,6 +793,8 @@ struct {
   "ifge",handle_ifge,
   "iflt",handle_iflt,
   "ifle",handle_ifle,
+  "ifused",handle_ifused,
+  "ifnused",handle_ifnused,
   "else",handle_else,
   "el",handle_else,
   "endif",handle_endif,

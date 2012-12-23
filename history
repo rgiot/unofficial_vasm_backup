@@ -72,6 +72,7 @@ o oldstyle-syntax: INCBIN got two optional arguments to skip bytes at the
   (contributed by Romain Giot).
 o oldstyle-syntax: New directive abyte, which adds a constant offset to
   each byte written (contributed by Romain Giot).
+o oldstyle-syntax: New directive ifused (contributed by Romain Giot).
 o std-syntax: Implemented .abort, .err and .fail directives.
 o std-syntax: Allow non-constant expressions for conditional directives,
   with the same restrictions as in the other syntax modules.

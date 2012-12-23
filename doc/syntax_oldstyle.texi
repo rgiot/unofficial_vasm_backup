@@ -277,6 +277,13 @@ CPU- and output-module allow it):
       Conditionally assemble the following lines if <expression> is
       less than zero or equal.
 
+@item ifused <symbol>
+      Conditionally assemble the following lines if <symbol> has been
+      previously referenced in an expression or in a parameter of an opcode.
+      Issue a warning, when <symbol> is already defined.
+      Note that @code{ifused} does not work, when the symbol has only been
+      used in the following lines of the source.
+
 @item incbin <file>[,<offset>[,<nbytes>]]
       Inserts the binary contents of <file> into the object code at
       this position. When <offset> is specified, then the given number

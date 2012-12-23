@@ -20,3 +20,4 @@
   "unexpected endr without rept",ERROR,
   "symbol <%s> already defined with %s scope",WARNING,               /* 20 */
   "alignment too big",WARNING,
+  "label <%s> had already been defined",WARNING,

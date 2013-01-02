@@ -208,11 +208,14 @@ You can define as many symbols as your available memory permits. A symbol
 may have any length and can be of global or local scope. Internally, there
 are three types of symbols:
 @table @code
-@item Expression. These symbols are usually not visible outside the
+@item Expression
+      These symbols are usually not visible outside the
       source, unless they are explicitely exported.
-@item Label. Labels are always addresses inside a program section. By
+@item Label
+      Labels are always addresses inside a program section. By
       default they have local scope for the linker.
-@item Imported. These symbols are externally defined and must be
+@item Imported
+      These symbols are externally defined and must be
       resolved by the linker.
 @end table
 

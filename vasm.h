@@ -36,10 +36,6 @@ typedef struct listing listing;
 #define BIGENDIAN (!LITTLEENDIAN)
 #endif
 
-#ifndef CPU_CHECKS_OPCNT
-#define CPU_CHECKS_OPCNT 0
-#endif
-
 #ifndef MNEMONIC_VALID
 #define MNEMONIC_VALID(i) 1
 #endif

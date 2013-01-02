@@ -82,14 +82,14 @@ aligned to its natural alignment by default.
 
 This backend provides the following specific extensions:
 
-@table @minus
+@itemize @minus
 
 @item When not disabled by the option @code{-no-regnames}, the registers r0 - r31,
  f0 - f31, v0 - v31, cr0 - cr7, vrsave, sp, rtoc, fp, fpscr, xer, lr, ctr,
  and the symbols lt, gt, so and un will be predefined on startup and may
  be referenced by the program.
 
-@end table
+@end itemize
 
 This backend extends the selected syntax module by the following
 directives:
@@ -108,12 +108,12 @@ directives:
 
 This backend performs the following optimizations:
 
-@table @minus
+@itemize @minus
 
-@item 16-bit branches where the destination is out of range are translated
+@item 16-bit branches, where the destination is out of range, are translated
  into @code{B<!cc> $+8} and a 26-bit unconditional branch.
 
-@end table
+@end itemize
 
 @section Known Problems
 

@@ -28,13 +28,11 @@ on Atari 16/32-bit computers with 68000 up to 68060 CPU.
 
 @section Restrictions
 
-@table @minus
-@item
-  All symbols must be defined, otherwise the generation of the executable
+@itemize @minus
+@item All symbols must be defined, otherwise the generation of the executable
   fails. Unknown symbols are listed by vasm.
-@item
-  The only relocations allowed in this format are 32-bit absolute.
-@end table
+@item The only relocations allowed in this format are 32-bit absolute.
+@end itemize
 Those are restrictions of the output format, not of vasm.
 
 @section Known Problems

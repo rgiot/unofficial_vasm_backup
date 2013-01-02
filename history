@@ -1,7 +1,7 @@
 vasm history
 =============
 
-- 1.5d (NO-RELEASE)
+- 1.6 (29.12.12)
 o New instruction/operand parser. Can handle instruction availability,
   depending on selected cpu-type, and optional operands in common code.
 o Now using the faster djb2 hash table algorithm. Tuned hash table sizes

@@ -100,7 +100,7 @@ See @code{.string}.
 @item .comm <symbol>,<size>[,<align>]
       Defines a common symbol which has a size of <size> bytes. The
       final size and alignment will be assigned by the linker, which
-      will use the highes size and alignment values of all common
+      will use the highest size and alignment values of all common
       symbols with the same name found. A common symbol is allocated
       in the .bss section in the final executable. ".comm"-areas of
       less than 8 bytes in size are aligned to word boundaries, other-
@@ -306,7 +306,7 @@ See @code{.string}.
       automatically align the section to the highest alignment restriction
       used within.
 
-      Memory flags:
+      Memory flags (Amiga hunk format only):
 
 @table @code
             

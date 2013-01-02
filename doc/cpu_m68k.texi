@@ -155,7 +155,7 @@ This module provides the following additional options:
         optimized to shifts. Divisions by 1 are replaced by @code{TST.L Dn}
         (32-bit) or @code{MVZ.W Dn,Dn} (16-bit, ColdFire only). Divisions by
         -1 are replaced by @code{NEG.L Dn} (32-bit) or by a combination of
-        @code{NEG.W Dn} and @code{MVZ.W Dn,Dn) (16-bit, ColdFire only).
+        @code{NEG.W Dn} and @code{MVZ.W Dn,Dn} (16-bit, ColdFire only).
         This optimization will leave the flags in a different state as
         can normally be expected after a division instruction.
 
@@ -187,12 +187,12 @@ This module provides the following additional options:
 
 In its default setting (no @option{-devpac} or @option{-phxass} option)
 vasm performs the following optimizations:
-@table @minus
+@itemize @minus
 @item Absolute to PC-relative.
 @item Branches without explicit size.
 @item Displacements (32 to 16 bit, @code{(0,An)} to @code{(An)}, etc).
 @item Many instruction optimizations which are safe.
-@end table
+@end itemize
 
 @subsection Other options
 @table @option
@@ -829,7 +829,7 @@ the option @code{-opt-lsl} is given.
 @item @code{MULS.L #2..256,Dn} optimized to @code{ASL.L #x,Dn}
 (@code{-opt-mul}).
 
-@item @code{MULS.L #-2..-256,Dn} optimized to the sequence code{ASL.L #x,Dn}
+@item @code{MULS.L #-2..-256,Dn} optimized to the sequence @code{ASL.L #x,Dn}
 and @code{NEG.L Dn} (@code{-opt-mul}).
 
 @item @code{MULU.W #2..256,Dn} optimized to the sequence @code{MVZ.W Dn,Dn} and

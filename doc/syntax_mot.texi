@@ -25,7 +25,7 @@ This syntax module provides the following additional options:
 
 @item -devpac
  Devpac-compatibility mode.
-@table @minus
+@itemize @minus
   @item Enables 16-bit alignment for constant declaration (@code{dc.?},
         except @code{dc.b}) directives.
   @item Predefines offset symbols @code{__RS}, @code{__SO} and @code{__FO} as
@@ -33,7 +33,7 @@ This syntax module provides the following additional options:
   @item Disable escape codes in strings (see @option{-noesc}).
   @item Enable dots within identifiers (see @option{-ldots}).
   @item Up to 35 macro arguments.
-@end table
+@end itemize
 
 @item -ldots
  Allow dots (@code{.}) within all identifiers.
@@ -44,14 +44,14 @@ This syntax module provides the following additional options:
 
 @item -phxass
  PhxAss-compatibilty mode. Enables the following features:
-@table @minus
+@itemize @minus
   @item @code{section <name>} starts a code section named @code{<name>}
         instead of a section which also has the type @code{<name>}.
   @item Macro names are treated as case-insensitive.
   @item Up to 35 macro arguments.
   @item Allow blanks in operands.
   @item Defines the symbol @code{_PHXASS_}.
-@end table
+@end itemize
 
 @item -spaces
  Allow blanks in operands.

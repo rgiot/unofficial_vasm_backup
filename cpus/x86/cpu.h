@@ -9,9 +9,6 @@
 /* maximum number of operands in one mnemonic */
 #define MAX_OPERANDS 3
 
-/* allowed to call parse_operand() with an arbitrary number of operands */
-#define CPU_CHECKS_OPCNT 0
-
 /* maximum number of mnemonic-qualifiers per mnemonic */
 #define MAX_QUALIFIERS 1
 

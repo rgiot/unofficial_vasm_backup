@@ -58,7 +58,7 @@ This module provides the following additional options:
     @item -m64
         Generate code for 64-bit architectures (x86_64).
 
-    @item -debug=<n>
+    @item -cpudebug=<n>
         Enables debugging output.
 
 @end table
@@ -82,7 +82,7 @@ suffix behind the mnemonic.
 
 Predefined register symbols in this backend:
 
-@table @minus
+@itemize @minus
 @item 8-bit registers: @code{al cl dl bl ah ch dh bh axl cxl dxl spl bpl sil dil r8b r9b r10b r11b r12b r13b r14b r15b}
 @item 16-bit registers: @code{ax cx dx bx sp bp si di r8w r9w r10w r11w r12w r13w r14w r15w}
 @item 32-bit registers: @code{eax ecx edx ebx esp ebp esi edi r8d r9d r10d r11d r12d r13d r14d r15d}
@@ -93,7 +93,7 @@ Predefined register symbols in this backend:
 @item test registers: @code{tr0 tr1 tr2 tr3 tr4 tr5 tr6 tr7}
 @item MMX and SIMD registers: @code{mm0 mm1 mm2 mm3 mm4 mm5 mm6 mm7 xmm0 xmm1 xmm2 xmm3 xmm4 xmm5 xmm6 xmm7 xmm8 xmm9 xmm10 xmm11 xmm12 xmm13 xmm14 xmm15}
 @item FPU registers: @code{st st(0) st(1) st(2) st(3) st(4) st(5) st(6) st(7)}
-@end table
+@end itemize
 
 This backend extends the selected syntax module by the following
 directives:

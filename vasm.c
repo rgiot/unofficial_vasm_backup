@@ -6,7 +6,7 @@
 
 #include "vasm.h"
 
-#define _VER "vasm 1.5d"
+#define _VER "vasm 1.6"
 char *copyright = _VER " (c) in 2002-2012 Volker Barthelmann";
 #ifdef AMIGA
 static const char *_ver = "$VER: " _VER " " __AMIGADATE__ "\r\n";

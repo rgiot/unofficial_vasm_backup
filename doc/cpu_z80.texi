@@ -96,6 +96,11 @@ will be emulated.
 @item Not all RCM4000 opcodes are supported (@code{llcall}, @code{lljp}
  are not available).
 
+@item Parser considers an expression starting by @code{(} as being a memory
+indirection even if there are operations after the closing @code{)}.
+As long as the bug is not corrected you should put operations before the first
+@code{(}.
+
 @end itemize
 
 @section Error Messages

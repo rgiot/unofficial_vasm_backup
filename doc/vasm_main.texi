@@ -226,7 +226,7 @@ are pre-defined by the syntax- or by the cpu module.
 
 @section Include Files
 
-vasm supports include files and defining include paths. Whether this
+Vasm supports include files and defining include paths. Whether this
 functionality is available depends on the syntax module, which has to
 provide the appropriate directives.
 
@@ -257,6 +257,11 @@ macro invocation.
 
 @code{\?n} represents the total length of parameter n in bytes. Note that the
 quotes in a string parameter are included.
+
+@section Structures
+
+Vasm supports structures, but the directives for defining them
+have to be implemented in the syntax module.
 
 @section Conditional Assembly
 
@@ -328,7 +333,7 @@ The frontend has the following error messages:
 @item 22: character constant too long
 @item 23: undefined local symbol
 @item 24: trailing garbage after option -%c
-@item 25: undefined macro parameter '\%d'
+@item 25: bad operand
 @item 26: missing end directive for macro "%s"
 @item 27: macro definition inside macro "%s"
 @item 28: maximum number of %d macro arguments exceeded
@@ -351,5 +356,10 @@ The frontend has the following error messages:
 @item 45: reloc org was not set
 @item 46: macro id insert on empty stack
 @item 47: bad file-offset argument
+@item 48: assertion "%s" failed: %s
+@item 49: missing end directive for structure "%s"
+@item 50: %s without size definition
+@item 51: string expected to define the value
+@item 52: size mismatch between the field definition and the default value
 
 @end itemize

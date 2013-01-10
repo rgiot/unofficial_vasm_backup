@@ -1,6 +1,15 @@
 vasm history
 =============
 
+- 1.6a (NO-RELEASE)
+o The vasm core supports structure definitions. A structure name can
+  either be used as a directive to initialize data, or in expressions
+  as the structure's size. Its fields are available as local labels to
+  the global structure name, defining the field offsets.
+  (Contributed by Romain Giot.)
+o oldstyle-syntax: struct and endstruct directives for supporting
+  structures.
+
 - 1.6 (29.12.12)
 o New instruction/operand parser. Can handle instruction availability,
   depending on selected cpu-type, and optional operands in common code.

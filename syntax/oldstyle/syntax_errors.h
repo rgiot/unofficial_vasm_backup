@@ -21,3 +21,6 @@
   "symbol <%s> already defined with %s scope",WARNING,               /* 20 */
   "alignment too big",WARNING,
   "label <%s> had already been defined",WARNING,
+  "unexpected endstruct without structure",ERROR,
+  "bitsize of %s unknown",ERROR,
+  "field <%s> already defined for structure <%s>",ERROR,             /* 25 */

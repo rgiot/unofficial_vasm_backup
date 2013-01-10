@@ -1,5 +1,5 @@
 /* syntax.c  syntax module for vasm */
-/* (c) in 2002-2012 by Frank Wille */
+/* (c) in 2002-2013 by Frank Wille */
 
 #include "vasm.h"
 
@@ -12,7 +12,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm oldstyle syntax module 0.10 (c) 2002-2012 Frank Wille";
+char *syntax_copyright="vasm oldstyle syntax module 0.10a (c) 2002-2013 Frank Wille";
 
 static char textname[]=".text",textattr[]="acrx";
 static char dataname[]=".data",dataattr[]="adrw";
@@ -23,10 +23,16 @@ char commentchar=';';
 char *defsectname = textname;
 char *defsecttype = "acrwx";
 
+static char endsname[] = ".endstructure";
 static char endmname[] = ".endmacro";
 static char endrname[] = ".endrepeat";
 static char reptname[] = ".rept";
 static char repeatname[] = ".repeat";
+
+static struct namelen ends_dirlist[] = {
+  { 4,&endsname[1] }, { 8,&endsname[1] }, { 9,&endsname[1] },
+  { 12,&endsname[1] }, { 0,0 }
+};
 static struct namelen endm_dirlist[] = {
   { 4,&endmname[1] }, { 6,&endmname[1] }, { 8,&endmname[1] }, { 0,0 }
 };
@@ -36,6 +42,11 @@ static struct namelen rept_dirlist[] = {
 static struct namelen endr_dirlist[] = {
   { 4,&endrname[1] }, { 6,&endrname[1] }, { 9,&endrname[1] }, { 0,0 }
 };
+
+static struct namelen dends_dirlist[] = {
+  { 5,&endsname[0] }, { 9,&endsname[0] }, { 10,&endsname[0] },
+  { 13,&endsname[0] }, { 0,0 }
+};
 static struct namelen dendm_dirlist[] = {
   { 5,&endmname[0] }, { 7,&endmname[0] }, { 9,&endmname[0] }, { 0,0 }
 };
@@ -44,6 +55,23 @@ static struct namelen drept_dirlist[] = {
 };
 static struct namelen dendr_dirlist[] = {
   { 5,&endrname[0] }, { 7,&endrname[0] }, { 10,&endrname[0] }, { 0,0 }
+};
+
+static struct datalen typelen_list[] = {
+  { 8,"asc" },
+  { 8,"db" },
+  { 8,"defb" },
+  { 8,"byte" },
+  { 8,"data" },
+  { 16,"addr" },
+  { 16,"defw" },
+  { 16,"dfw" },
+  { 16,"dw" },
+  { 16,"wor" },
+  { 16,"word" },
+  { 0,"ds" },
+  { 0,"defs" },
+  { -1,0 }
 };
 
 static int dotdirectives = 0;
@@ -715,6 +743,27 @@ static void handle_endm(char *s)
 }
 
 
+static void handle_struct(char *s)
+{
+  char *name;
+  
+  if (name = parse_identifier(&s)) {
+    s = skip(s);
+    eol(s);
+    new_structure(name,dotdirectives?dends_dirlist:ends_dirlist,s);
+    myfree(name);
+  }
+  else
+    syntax_error(10);  /* identifier expected */
+}
+
+
+static void handle_endstruct(char *s)
+{
+  syntax_error(23); /* unexpected endstruct without structure*/
+}
+
+
 static void handle_defc(char *s)
 {
   char *name;
@@ -836,6 +885,8 @@ struct {
   "string",handle_string,
   "list",handle_list,
   "nolist",handle_nolist,
+  "struct",handle_struct,
+  "endstruct",handle_endstruct,
 };
 
 int dir_cnt = sizeof(directives) / sizeof(directives[0]);
@@ -996,6 +1047,20 @@ void parse(void)
         myfree(labname);
         continue;
       }
+      else if (!strnicmp(s,"struct",6) &&
+               (isspace((unsigned char)*(s+6)) || *(s+6)=='\0') ||
+               !strnicmp(s,"structure",9) &&
+               (isspace((unsigned char)*(s+9)) || *(s+9)=='\0')) {
+        char *params = skip(s + (*(s+6)=='r'?9:6));
+
+        s = line;
+        myfree(labname);
+        if (!(labname = parse_identifier(&s)))
+          ierror(0);
+        new_structure(labname,dotdirectives?dends_dirlist:ends_dirlist,params);
+        myfree(labname);
+        continue;
+      }
       else {
         /* it's just a label */
         label = new_labsym(0,labname);
@@ -1048,6 +1113,8 @@ void parse(void)
     s = skip(s);
 
     if (execute_macro(inst,inst_len,ext,ext_len,ext_cnt,s,clev))
+      continue;
+    if (execute_struct(inst,inst_len,ext,ext_len,ext_cnt,s,clev))
       continue;
 
     /* read operands, terminated by comma (unless in parentheses)  */
@@ -1211,6 +1278,8 @@ int init_syntax()
   /* means that \a..\z are disabled. \1..\9 still work in parallel. */
   namedmacparams = 1;
   maxmacparams = 36;
+
+  structure_type_lookup = typelen_list;
   return 1;
 }
 

@@ -4,7 +4,7 @@ which is available with the extension @code{oldstyle}.
 
 @section Legal
 
-    This module is copyright in 2002-2012 by Frank Wille.
+    This module is copyright in 2002-2013 by Frank Wille.
 
     This archive may be redistributed without modifications and used
     for non-commercial purposes.
@@ -220,6 +220,9 @@ CPU- and output-module allow it):
 @item endrepeat
       Ends a repetition block.
 
+@item endstruct
+      Ends a structure definition.
+
 @item <symbol> eq <expression>
       Equivalent to @code{<symbol> equ <expression>}.
 
@@ -421,7 +424,18 @@ CPU- and output-module allow it):
       Equivalent to @code{blk <exp>,0}.
 
 @item string "<string1>"[,"<string2>"...]
-        Like @code{string}, but adds a terminating zero-byte.
+      Like @code{string}, but adds a terminating zero-byte.
+
+@item struct <name>
+      Defines a structure which can be referenced by <name>, followed by
+      optionnal arguments representing the value of the fields. 
+      The structure definition is closed by an @code{endstruct} directive.
+      The inner part of the structure contains lines encoded as follows:
+      @code{<fieldname> <type> [<value>]}.
+      Various symbols are generated.
+      The symbol <name> gives the size of the structure.
+      The symbols <name.fieldname> gives the offset of the field <fieldname>
+      in the structure.
 
 @item text "string"
       Places a single string constant operands into successive bytes of
@@ -456,6 +470,105 @@ CPU- and output-module allow it):
 
 @end table
 
+
+@section Structures
+The oldstyle syntax is able to manage structures.
+Structures can be defined in two ways:
+@example 
+mylabel struct[ure]
+  <fields>
+endstruct[ure]
+@end example  
+       or:    
+@example      
+struct[ure] mylabel
+  <fields>
+endstruct[ure]
+@end example  
+
+where the fields can be of the following types:
+@table @code
+@item db [<defaultvalue>]
+      Define a 1 byte field
+
+@item defb [<defaultvalue>]
+      Equivalent to @code{db [<defaultvalue>]}
+
+@item byte [<defaultvalue>]
+      Equivalent to @code{db [<defaultvalue>]}
+
+@item data [<defaultvalue>]
+      Equivalent to @code{db [<defaultvalue>]}
+
+@item dw [<defaultvalue>]
+      Define a 1 word field
+
+@item addr [<defaultvalue>]
+      Equivalent to @code{dw [<defaultvalue>]}
+
+@item defw [<defaultvalue>]
+      Equivalent to @code{dw [<defaultvalue>]}
+
+@item wor [<defaultvalue>]
+      Equivalent to @code{dw [<defaultvalue>]}
+
+@item word [<defaultvalue>]
+      Equivalent to @code{dw [<defaultvalue>]}
+
+@item ds <size>, <defaultvalue>
+      Define an array of bytes
+
+@item defs <size> [,<defaultvalue>]
+      Equivalent to @code{ds <size> [,<defaultvalue>]}
+
+@end table
+
+The default value is used when no initialisation value is given when the
+structure is defined.
+
+The default of a DS field can contain more than one expression or string,
+as long the length of the field is not exceeded.
+
+Some examples of structure declarations:
+@example
+  struct point
+x    db 4
+y    db 5
+z    db 6
+  endstruct
+@end example
+
+This will create the following labels:
+@example
+point.x  ; 0   offsets
+point.y  ; 1
+point.z  ; 2
+point    ; 3   size of the structure
+@end example
+
+The structure can be used by optionnaly redefining the fields value:
+@example
+point1 point
+point2 point 1, 2, 3
+point3 point ,,4
+@end example
+is equivalent to
+@example
+point1  
+               db 4
+               db 5
+               db 6
+point2
+               db 1
+               db 2
+               db 3
+point3
+               db 4
+               db 5
+               db 4
+@end example
+
+
 @section Known Problems
 
     Some known problems of this module at the moment:
@@ -463,7 +576,8 @@ CPU- and output-module allow it):
 @itemize @minus
 
 @item Addresses assigned to @code{org} or to the current pc symbol @code{'*'}
-(on the z80 the pc symbol is @code{'$'})  must be constant.
+(on the z80 the pc symbol is @code{'$'}) must be constant.
+
 @item Expressions in an @code{if} directive must be constant.
 
 @end itemize
@@ -495,5 +609,10 @@ This module has the following error messages:
 @item 1020: unexpected endr without rept
 @item 1021: cannot open binary file "%s"
 @item 1022: symbol <%s> already defined with %s scope
+@item 1023: alignment too big
+@item 1024: label <%s> had already been defined
+@item 1025: unexpected endstruct without structure
+@item 1026: bitsize of %s unknown
+@item 1027: field <%s> already defined for structure <%s>
 
 @end itemize

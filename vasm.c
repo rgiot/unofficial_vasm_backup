@@ -1,13 +1,13 @@
 /* vasm.c  main module for vasm */
-/* (c) in 2002-2012 by Volker Barthelmann */
+/* (c) in 2002-2013 by Volker Barthelmann */
 
 #include <stdlib.h>
 #include <stdio.h>
 
 #include "vasm.h"
 
-#define _VER "vasm 1.6"
-char *copyright = _VER " (c) in 2002-2012 Volker Barthelmann";
+#define _VER "vasm 1.6a"
+char *copyright = _VER " (c) in 2002-2013 Volker Barthelmann";
 #ifdef AMIGA
 static const char *_ver = "$VER: " _VER " " __AMIGADATE__ "\r\n";
 #endif

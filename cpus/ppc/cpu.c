@@ -338,73 +338,6 @@ static int get_reloc_type(operand *op)
 }
 
 
-static nreloc *get_reloc_size(nreloc *r,operand *op)
-/* determine reloc size, offset and mask
-   creates and returns a second nreloc structure, when required */
-{
-  nreloc *r2 = NULL;
-
-  if (op->type >= OP_D8) {  /* data */
-    switch (op->type) {
-      case OP_D8:
-        r->size = 8;
-        break;
-      case OP_D16:
-        r->size = 16;
-        break;
-      case OP_D32:
-        r->size = 32;
-        break;
-      case OP_D64:
-        r->size = 64;
-        break;
-      default:
-        ierror(0);
-        break;
-    }
-  }
-  else {  /* instructions */
-    const struct powerpc_operand *ppcop = &powerpc_operands[op->type];
-
-    if (ppcop->flags & (OPER_RELATIVE|OPER_ABSOLUTE)) {
-      /* branch instruction */
-      if (ppcop->bits == 26) {
-        r->size = 24;
-        r->offset = 6;
-        r->mask = 0x3fffffc;
-      }
-      else {
-        r->size = 14;
-        r->offset = 16;
-        r->mask = 0xfffc;
-      }
-    }
-    else {
-      /* load/store or immediate */
-      r->size = 16;
-      r->offset = 16;
-      switch (op->mode) {
-        case OPM_LO:
-          r->mask = 0xffff;
-          break;
-        case OPM_HI:
-          r->mask = 0xffff0000;
-          break;
-        case OPM_HA:
-          r->mask = 0xffff0000;
-          r2 = new_nreloc();
-          r2->size = 16;
-          r2->offset = 16;
-          r2->mask = 0x8000;
-          r2->addend = r->addend;
-          break;
-      }
-    }
-  }
-  return r2;
-}
-
-
 static int valid_hiloreloc(int type)
 /* checks if this relocation type allows a @l/@h/@ha modifier */
 {
@@ -429,57 +362,97 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
 
   if (!eval_expr(op->value,&val,sec,pc)) {
     /* non-constant expression requires a relocation entry */
-    nreloc *r = new_nreloc();
-    nreloc *r2;
-    rlist *rl = mymalloc(sizeof(rlist));
-    int btype = find_base(&r->sym,op->value,sec,pc);
+    symbol *base;
+    int btype,size,offset;
+    taddr addend,mask;
 
-    if (btype == BASE_PCREL) {
-      if (reloctype == REL_ABS)
-        reloctype = REL_PC;
-      else
-        goto illreloc;
-    }
+    btype = find_base(op->value,&base,sec,pc);
 
     if (btype != BASE_ILLEGAL) {
-      rl->type = reloctype;
+      if (btype == BASE_PCREL) {
+        if (reloctype == REL_ABS)
+          reloctype = REL_PC;
+        else
+          goto illreloc;
+      }
+
       if (op->mode != OPM_NONE) {
-        if (!valid_hiloreloc(reloctype))  /* check if reloc allows @ha/@h/@l */
+        /* check if reloc allows @ha/@h/@l */
+        if (!valid_hiloreloc(reloctype))
           op->mode = OPM_NONE;
       }
 
       if (reloctype == REL_PC) {
         /* a relative branch - reloc is only needed for external reference */
-        if (r->sym->type==LABSYM && r->sym->sec==sec) {
-          myfree(rl);
-          myfree(r);
+        if (base->type==LABSYM && base->sec==sec)
           return val-pc;
+      }
+
+      /* determine reloc size, offset and mask */
+      if (op->type >= OP_D8) {  /* data operand */
+        switch (op->type) {
+          case OP_D8:
+            size = 8;
+            break;
+          case OP_D16:
+            size = 16;
+            break;
+          case OP_D32:
+            size = 32;
+            break;
+          case OP_D64:
+            size = 64;
+            break;
+          default:
+            ierror(0);
+            break;
+        }
+        addend = 0;
+        offset = 0;
+        mask = -1;
+      }
+      else {  /* instruction operand */
+        const struct powerpc_operand *ppcop = &powerpc_operands[op->type];
+
+        if (ppcop->flags & (OPER_RELATIVE|OPER_ABSOLUTE)) {
+          /* branch instruction */
+          if (ppcop->bits == 26) {
+            size = 24;
+            offset = 6;
+            mask = 0x3fffffc;
+          }
+          else {
+            size = 14;
+            offset = 16;
+            mask = 0xfffc;
+          }
+          addend = (btype == BASE_PCREL) ? val + offset/8 : val;
+        }
+        else {
+          /* load/store or immediate */
+          size = 16;
+          offset = 16;
+          addend = (btype == BASE_PCREL) ? val + offset/8 : val;
+          switch (op->mode) {
+            case OPM_LO:
+              mask = 0xffff;
+              break;
+            case OPM_HI:
+              mask = 0xffff0000;
+              break;
+            case OPM_HA:
+              add_nreloc_masked(reloclist,base,addend,reloctype,
+                                size,offset,0x8000);
+              mask = 0xffff0000;
+              break;
+          }
         }
       }
 
-      if (r2 = get_reloc_size(r,op)) {
-        /* a second relocation for @ha is required */
-        rlist *rl2 = mymalloc(sizeof(rlist));
-
-        r2->sym = r->sym;
-        rl2->type = rl->type;
-        rl2->reloc = r2;
-        rl2->next = *reloclist;
-        *reloclist = rl2;
-      }
-      rl->reloc = r;
-      rl->next = *reloclist;
-      *reloclist = rl;
-
-      if (btype == BASE_PCREL)
-        r->addend = val + (r->offset >> 3);
-      else
-        r->addend = val;
+      add_nreloc_masked(reloclist,base,addend,reloctype,size,offset,mask);
     }
     else {
 illreloc:
-      myfree(rl);
-      myfree(r);
       general_error(38);  /* illegal relocation */
     }
   }
@@ -797,30 +770,30 @@ static void define_regnames(void)
   int i;
 
   for (i=0; i<32; i++) {
-    sprintf(r,"r%d",i);
-    new_abs(r,number_expr(i));
+    sprintf(r,"r%d",(taddr)i);
+    set_internal_abs(r,(taddr)i);
     r[0] = 'f';
-    new_abs(r,number_expr(i));
+    set_internal_abs(r,(taddr)i);
     r[0] = 'v';
-    new_abs(r,number_expr(i));
+    set_internal_abs(r,(taddr)i);
   }
   for (i=0; i<8; i++) {
     sprintf(r,"cr%d",i);
-    new_abs(r,number_expr(i));
+    set_internal_abs(r,(taddr)i);
   }
-  new_abs("vrsave",number_expr(256));
-  new_abs("lt",number_expr(0));
-  new_abs("gt",number_expr(1));
-  new_abs("eq",number_expr(2));
-  new_abs("so",number_expr(3));
-  new_abs("un",number_expr(3));
-  new_abs("sp",number_expr(1));
-  new_abs("rtoc",number_expr(2));
-  new_abs("fp",number_expr(31));
-  new_abs("fpscr",number_expr(0));
-  new_abs("xer",number_expr(1));
-  new_abs("lr",number_expr(8));
-  new_abs("ctr",number_expr(9));
+  set_internal_abs("vrsave",256);
+  set_internal_abs("lt",0);
+  set_internal_abs("gt",1);
+  set_internal_abs("eq",2);
+  set_internal_abs("so",3);
+  set_internal_abs("un",3);
+  set_internal_abs("sp",1);
+  set_internal_abs("rtoc",2);
+  set_internal_abs("fp",31);
+  set_internal_abs("fpscr",0);
+  set_internal_abs("xer",1);
+  set_internal_abs("lr",8);
+  set_internal_abs("ctr",9);
 }
 
 

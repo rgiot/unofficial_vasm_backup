@@ -95,6 +95,7 @@ sblock *new_sblock(expr *,int,expr *);
 void add_atom(section *,atom *);
 taddr atom_size(atom *,section *,taddr);
 void print_atom(FILE *,atom *);
+atom *clone_atom(atom *);
 
 atom *new_inst_atom(instruction *);
 atom *new_data_atom(dblock *,taddr);

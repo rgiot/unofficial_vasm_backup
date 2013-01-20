@@ -357,9 +357,7 @@ The frontend has the following error messages:
 @item 46: macro id insert on empty stack
 @item 47: bad file-offset argument
 @item 48: assertion "%s" failed: %s
-@item 49: missing end directive for structure "%s"
-@item 50: %s without size definition
-@item 51: string expected to define the value
-@item 52: size mismatch between the field definition and the default value
+@item 49: cannot declare structure within structure
+@item 50: no structure
 
 @end itemize

@@ -302,7 +302,7 @@ static taddr reloffset(expr *tree,section *sec,taddr pc)
     /* should we do it like this?? */
     val=tree->c.val;
   }else{
-    btype=find_base(&sym,tree,sec,pc);
+    btype=find_base(tree,&sym,sec,pc);
     if(btype!=BASE_OK||sym->type!=LABSYM||sym->sec!=sec)
       val=0xffff;
     else{
@@ -329,29 +329,21 @@ static taddr absoffset2(expr *tree,int mod,section *sec,taddr pc,rlist **relocs,
     mask=0x3fff;
   }
   if(!eval_expr(tree,&val,sec,pc)){
-    nreloc *reloc=new_nreloc();
-    rlist *rl=mymalloc(sizeof(*rl));
-    rl->type=REL_ABS;
-    reloc->offset=roffset;
-    reloc->size=size;
-    reloc->mask=mask;
-    if(find_base(&reloc->sym,tree,sec,pc)!=BASE_OK){
+    taddr addend=val;
+    symbol *base;
+    if(find_base(tree,&base,sec,pc)!=BASE_OK){
       general_error(38);
-    }else{
-      rl->reloc=reloc;
-      rl->next=*relocs;
-      *relocs=rl;
+      return val;
     }
-    reloc->addend=val;
     if(mod==MOD_DPP1) val|=0x4000;
     if(mod==MOD_DPP2) val|=0x8000;
     if(mod==MOD_DPP3) val|=0xc000;
     if(mod==MOD_DPPX){
       static int dpplen;
       static char *dppname;
-      char *id=reloc->sym->name;
+      char *id=base->name;
       symbol *dppsym;
-      reloc->size-=2;
+      size-=2;
       if(strlen(id)+9>dpplen){
         myfree(dppname);
         dppname=mymalloc(dpplen=strlen(id)+9);
@@ -364,19 +356,10 @@ static taddr absoffset2(expr *tree,int mod,section *sec,taddr pc,rlist **relocs,
           ierror(0);
         val<<=14;
       }else{
-        reloc=new_nreloc();
-        reloc->offset=roffset+14;
-        reloc->size=2;
-        reloc->sym=dppsym;
-        reloc->mask=0x3;
-        reloc->addend=0;
-        rl->next=mymalloc(sizeof(*rl));
-        rl=rl->next;
-        rl->type=REL_ABS;
-        rl->reloc=reloc;
-        rl->next=0;
+        add_nreloc_masked(relocs,dppsym,0,REL_ABS,2,roffset+14,0x3);
       }
     }
+    add_nreloc_masked(relocs,base,addend,REL_ABS,size,roffset,mask);
     return val;
   }
   val&=mask;

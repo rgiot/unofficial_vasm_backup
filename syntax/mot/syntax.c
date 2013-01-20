@@ -1,5 +1,5 @@
 /* syntax.c  syntax module for vasm */
-/* (c) in 2002-2012 by Frank Wille */
+/* (c) in 2002-2013 by Frank Wille */
 
 #include "vasm.h"
 
@@ -12,7 +12,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm motorola syntax module 3.3c (c) 2002-2012 Frank Wille";
+char *syntax_copyright="vasm motorola syntax module 3.4 (c) 2002-2013 Frank Wille";
 
 char commentchar = ';';
 
@@ -145,6 +145,20 @@ char *skip_operand(char *s)
 }
 
 
+static int check_sym_defined(char *symname)
+{
+  symbol *sym;
+
+  if (sym = find_symbol(symname)) {
+    if (sym->type != IMPORT) {
+      syntax_error(14);  /* repeatedly defined symbol */
+      return 1;
+    }
+  }
+  return 0;
+}
+
+
 /* assign value of current struct- or frame-offset symbol to an abs-symbol,
    or just increment/decrement when equname is NULL */
 static symbol *new_setoffset_size(char *equname,char *symname,
@@ -154,12 +168,8 @@ static symbol *new_setoffset_size(char *equname,char *symname,
   expr *new;
 
   if (equname) {
-    if (sym = find_symbol(equname)) {
-      if (sym->type != IMPORT) {
-        syntax_error(14);  /* repeatedly defined symbol */
-        return NULL;
-      }
-    }
+    if (check_sym_defined(equname))
+      return NULL;
   }
 
   /* get current offset symbol expression, then increment or decrement it */
@@ -335,6 +345,19 @@ static void handle_section(char *s)
     new_section(name,attr,1);
     switch_section(name,attr);
   }
+}
+
+
+static void handle_offset(char *s)
+{
+  taddr offs;
+
+  if (*s!='\0' && *s!=commentchar)
+    offs = parse_constexpr(&s);
+  else
+    offs = -1;  /* use last offset */
+
+  switch_offset_section(NULL,offs);
 }
 
 
@@ -878,13 +901,11 @@ static void handle_erem(char *s)
 
 static void handle_ifb(char *s)
 {
-  s = skip(s);
   cond[++clev] = (*s=='\0' || *s==commentchar);
 }
 
 static void handle_ifnb(char *s)
 {
-  s = skip(s);
   cond[++clev] = (*s!='\0' && *s!=commentchar);
 }
 
@@ -1122,6 +1143,76 @@ static void handle_fo96(char *s)
   new_setoffset_size(NULL,fo_name,&s,-1,12);
 }
 
+static void handle_cargs(char *s)
+{
+  char *name;
+  expr *offs;
+  taddr size;
+
+  if (*s == '#') {
+    /* offset given */
+    ++s;
+    offs = parse_expr_tmplab(&s);
+    s = skip(s);
+    if (*s != ',')
+      syntax_error(9);  /* , expected */
+    else
+      s = skip(s+1);
+  }
+  else
+    offs = number_expr(4);  /* default offset */
+
+  for (;;) {
+
+    if (!(name = get_local_label(&s)))
+      name = parse_identifier(&s);
+    if (!name) {
+      syntax_error(10);  /* identifier expected */
+      break;
+    }
+
+    if (!check_sym_defined(name)) {
+      /* define new stack offset symbol */
+      new_abs(name,copy_tree(offs));
+    }
+    myfree(name);
+
+    /* increment offset by given size */
+    if (*s == '.') {
+      ++s;
+      switch (tolower((unsigned char)*s)) {
+        case 'b':
+        case 'w':
+          size = 2;
+          ++s;
+          break;
+        case 'l':
+          size = 4;
+          ++s;
+          break;
+        default:
+          size = 2;
+          syntax_error(1);  /* invalid extension */
+          break;
+      }
+    }
+    else
+      size = 2;
+
+    s = skip(s);
+    if (*s != ',')  /* define another offset symbol? */
+      break;
+
+    offs = make_expr(ADD,offs,number_expr(size));
+    simplify_expr(offs);
+    s = skip(s+1);
+  }
+
+  /* offset expression was copied, so we can free it now */
+  if (offs)
+    free_expr(offs);
+}
+
 static void handle_printt(char *s)
 {
   add_atom(0,new_text_atom(parse_name(&s)));
@@ -1151,7 +1242,6 @@ static void handle_noop(char *s)
 
 static void handle_comment(char *s)
 {
-  s = skip(s);
   /* handle Atari-specific "COMMENT HEAD=<expr>" to define the tos-flags */
   if (!strnicmp(s,"HEAD=",5)) {
     s += 5;
@@ -1168,6 +1258,7 @@ struct {
   "org",handle_org,
   "rorg",handle_rorg,
   "section",handle_section,
+  "offset",handle_offset,
   "code",handle_csec,
   "cseg",handle_csec,
   "text",handle_csec,
@@ -1307,6 +1398,7 @@ struct {
   "fo.s",handle_fo32,
   "fo.d",handle_fo64,
   "fo.x",handle_fo96,
+  "cargs",handle_cargs,
   "echo",handle_printt,
   "printt",handle_printt,
   "printv",handle_printv,
@@ -1413,25 +1505,19 @@ void parse(void)
 
     if (labname) {
       /* we have found a global or local label at first column */
-      symbol *label,*labsym;
+      symbol *label;
       int lablen = strlen(labname);
 
       if (*s == ':')    /* ':' is optional */
         s = skip(s+1);
 
       if (!strnicmp(s,"equ",3) && isspace((unsigned char)*(s+3))) {
-        if (labsym = find_symbol(labname)) {
-          if (labsym->type != IMPORT)
-            syntax_error(14);  /* repeatedly defined symbol */
-        }
+        check_sym_defined(labname);
         s = skip(s+3);
         label = new_abs(labname,parse_expr_tmplab(&s));
       }
       else if (*s=='=') {
-        if (labsym = find_symbol(labname)) {
-          if (labsym->type != IMPORT)
-            syntax_error(14);  /* repeatedly defined symbol */
-        }
+        check_sym_defined(labname);
         s = skip(s+1);
         label = new_abs(labname,parse_expr_tmplab(&s));
       }

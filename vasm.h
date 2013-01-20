@@ -126,6 +126,8 @@ struct symbol {
 /* section flags */
 #define HAS_SYMBOLS 1
 #define RESOLVE_WARN 2
+#define UNALLOCATED 4
+#define LABELS_ARE_LOCAL 8
 
 /* section description */
 struct section {
@@ -207,6 +209,7 @@ section *new_section(char *,char *,int);
 void new_org(taddr);
 section *find_section(char *,char *);
 void switch_section(char *,char *);
+void switch_offset_section(char *,taddr);
 void add_align(section *,taddr,expr *,int,unsigned char *);
 section *default_section(void);
 void print_section(FILE *,section *);

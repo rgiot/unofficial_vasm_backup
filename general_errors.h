@@ -22,7 +22,7 @@
   "character constant too long",ERROR,
   "undefined symbol <%s>",NOLINE|ERROR,
   "trailing garbage after option -%c",NOLINE|WARNING,
-  "bad operand",ERROR,
+  "undefined macro parameter \'\\%d\'",ERROR,
   "missing end directive for macro \"%s\"",ERROR|FATAL,         /* 25 */
   "macro definition inside macro \"%s\"",ERROR|FATAL,
   "maximum number of %d macro arguments exceeded",ERROR,
@@ -46,7 +46,5 @@
   "macro id insert on empty stack",ERROR,                       /* 45 */
   "bad file-offset argument",ERROR,
   "assertion \"%s\" failed: %s",ERROR,
-  "missing end directive for structure \"%s\"",ERROR|FATAL,
-  "%s without size definition",ERROR,  
-  "string expected to define the value", ERROR,                 /* 50 */
-  "size mismatch between the field definition and the default value", ERROR,
+  "cannot declare structure within structure",ERROR,
+  "no structure",ERROR,

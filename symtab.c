@@ -5,14 +5,11 @@
 
 hashtable *new_hashtable(size_t size)
 {
-  size_t i;
   hashtable *new = mymalloc(sizeof(*new));
 
   new->size = size;
   new->collisions = 0;
-  new->entries = mymalloc(size*sizeof(*new->entries));
-  for (i=0; i<size; i++)
-    new->entries[i] = 0;
+  new->entries = mycalloc(size*sizeof(*new->entries));
   return new;
 }
 

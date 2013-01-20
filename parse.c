@@ -3,15 +3,10 @@
 
 #include "vasm.h"
 
-/* parse tuning */
 int esc_sequences = 1;  /* handle escape sequences */
 int nocase_macros = 0;  /* macro names are case-insensitive */
 int maxmacparams = 10;  /* 10: \0..\9, 36: \0..\9+\a..\z */
 int namedmacparams = 0; /* allow named macro arguments, like \argname */
-int nocase_structure = 0; /* structure names are case-insensitive */
-
-/* Has to be initialized by syntax module, when structures are supported: */
-struct datalen *structure_type_lookup = NULL;
 
 #ifndef MACROHTABSIZE
 #define MACROHTABSIZE 0x800
@@ -19,19 +14,19 @@ struct datalen *structure_type_lookup = NULL;
 static hashtable *macrohash;
 
 #ifndef STRUCTHTABSIZE
-#define STRUCTHTABSIZE 0x400
+#define STRUCTHTABSIZE 0x800
 #endif
 static hashtable *structhash;
 
 static macro *first_macro;
 static macro *cur_macro;
-static structure *first_struct;
-static structure *cur_struct;
 static struct namelen *enddir_list;
 static size_t enddir_minlen;
 static struct namelen *reptdir_list;
 static int rept_cnt = -1;
 static char *rept_start;
+static section *cur_struct;
+static section *struct_prevsect;
 #ifdef CARGSYM
 static expr *carg1;
 #endif
@@ -327,20 +322,6 @@ void include_binary_file(char *inname,long nbskip,unsigned long nbkeep)
 }
 
 
-int get_bitsize_of_type(char *s, int len)
-/* Return the number of bits required to store the parameter of the structure */
-{
-  struct datalen *list = structure_type_lookup;
-
-  while (list->name != 0) {
-    if (!strnicmp(s, list->name, len))
-      return list->bitlen;
-    list++;
-  }
-  return -1;
-}
-
-
 static struct namelen *dirlist_match(char *s,char *e,struct namelen *list)
 /* check if a directive from the list matches the current source location */
 {
@@ -619,129 +600,6 @@ int leave_macro(void)
 }
 
 
-structure *new_structure(char *name,struct namelen *endslist,char *args)
-{
-  structure *st = NULL;
-
-  /* impossible to declare a structure inside a macro */
-  if (cur_macro != NULL)
-    ierror(0);
-
-  if (cur_struct==NULL && cur_src!=NULL && enddir_list==NULL) {
-    st = mymalloc(sizeof(structure));
-    st->name = mystrdup(name);
-    if (nocase_structure)
-      strtolower(st->name);
-    st->text = cur_src->srcptr;
-    cur_struct = st;
-    enddir_list = endslist;
-    enddir_minlen = dirlist_minlen(endslist);
-    rept_cnt = -1;
-    rept_start = NULL;
-
-    if (args) {
-      /* TODO manage the args */
-    }
-  }  
-  else
-    ierror(0);
-
-  return st;
-}
-
-
-/* check if 'name' is a known structure, make atoms from structure content */
-int execute_struct(char *name,int name_len,char **q,int *q_len,int nq,
-                   char *s,int clev)
-{
-  hashdata data;
-  structure *st;
-  structfield *field;
-  atom *a;
-
-  /* verify if structure exists */
-  if (nocase_structure) {
-    if (!find_namelen_nc(structhash,name,name_len,&data))
-      return 0;
-  }
-  else {
-    if (!find_namelen(structhash,name,name_len,&data))
-      return 0;
-  }
-
-  st = data.ptr;
-  field = st->field;
-  s = skip(s);
-
-  /* output fields value */
-  while (field) {
-
-    if (!field->isarray) {
-      /* normal case */
-      if (*s=='\0' || *s==',') {
-        /* no more args, or empty arg: use default value */
-        a = new_space_atom(number_expr(1),field->bitsize/8,
-                           number_expr(field->content.defval));
-      }
-      else {
-        operand *op = new_operand();
-        char *opstart;
-
-        opstart = s;
-        s = skip_operand(s);
-        if (parse_operand(opstart,s-opstart,op,DATA_OPERAND(field->bitsize))) {
-          a = new_datadef_atom(field->bitsize,op);
-        }
-        else {
-          general_error(24);  /* bad operand */
-          return;
-        }
-      }
-    }
-    else {
-      /* array information */
-      int i;
-      dblock *db;
-
-      if (*s=='\0' || *s==',') {  /* no more args, or empty arg*/
-        db       = new_dblock();
-        db->data = field->content.defarray;
-        db->size = field->bitsize/8;
-      }
-      else {   
-        /* Read the definition in a row */
-        s = skip(s);
-        
-        if (*s=='\"' || *s=='\'') {
-          db = parse_string(&s,*s,8);
-          if (db==NULL || db->size != field->bitsize/8) {
-            general_error(51);
-            return;
-          }
-        }
-        else {
-          general_error(50);
-          return;
-        }
-      }
-      a = new_data_atom(db,1);
-    }
-
-    add_atom(0,a);
-
-    field = field->next;
-    s = skip(s);
-    if (*s == ',') {
-      s++;
-      s = skip(s);
-      /* TODO verify there are no more parameters than expected */
-    }
-
-  }
-  return 1;
-}
-
-
 static void start_repeat(char *rept_end)
 {
   char buf[MAXPATHLEN];
@@ -832,213 +690,51 @@ static int copy_macro_carg(int inc,char *d,int len)
 #endif
 
 
-static void add_structure(void)
-/* Add the structure to the hashtable.
- * Extract the information of the structure and store it.
- */
+/* Switch to a named offset section which defines the structure. */
+int new_structure(char *name)
 {
-  if (cur_struct!=NULL && cur_src!=NULL) {
-    structfield *cur_field, *field;
-    symbol *label;
-    hashdata data;
-    char *inner;
-    int base;
+  hashdata data;
 
-    cur_struct->size = cur_src->srcptr - cur_struct->text;
-    cur_struct->next = first_struct;
-    cur_struct->length = 0;
-    first_struct = cur_struct;
-    data.ptr = cur_struct;
-    add_hashentry(structhash,cur_struct->name,data);
-
-    /* parse the structure content */
-    inner = cur_struct->text;
-    cur_field = NULL;
-
-    while (inner < cur_src->srcptr) {
-      char *id, *type;
-      taddr def;
-      int bitsize;
-      int defscnt;
-      int isarray=0;
-      char *array_content=NULL;
-
-      /* get name of the variable */
-      if (isspace(*inner)) {  /*BUG works only at first line! */
-        syntax_error(10);
-        return;
-      }
-      id = parse_identifier(&inner);
-
-      /* verify if label already exists */
-      field = cur_struct->field;
-      while (field) {
-        if (!stricmp(field->name, id)) {
-          syntax_error(25, id, cur_struct->name);
-          return;
-        }
-        field = field->next;
-      }
-
-      /* get type of the variable. TODO use types defined in syntax module */
-      while (*inner==' ' || *inner=='\t')
-        inner++;
-      type = parse_identifier(&inner);
-      bitsize = get_bitsize_of_type(type, type-inner);
-      if (bitsize == -1) {
-        syntax_error(24, type); /*bitsize unknown */
-        return;
-      }
-      else if (bitsize == 0) {  /* compute the size */
-        char *backup;
-        int i;
-
-        while (*inner==' ' || *inner=='\t')
-          inner++;
-        if (*inner=='\r' || *inner=='\n') {
-          syntax_error(49, type);
-          return;
-        }
-
-        /* read the number of elements */
-        backup = inner;
-        isarray = 1;
-        defscnt = parse_constexpr(&inner);
-        inner = skip_eol(backup, inner);
-        bitsize = 8 * defscnt;
-
-        /* default array contains null */
-        array_content = mycalloc(sizeof(char)*defscnt);
-      }
-      else
-        isarray = 0;
-
-      cur_struct->length += bitsize;
-
-      /* Read the optional default value */
-      while (*inner==' '|| *inner=='\t')
-        inner++;
-      if (*inner!='\r' && *inner!='\n') {
-        if (!isarray) {  /* normal case */
-          char *backup = inner;
-
-          def = parse_constexpr(&inner);
-          inner = skip_eol(backup, inner);
-          while (*inner=='\r' || *inner=='\n')
-            inner++;
-        }
-        else {
-          /* Array field default value can be defined with several
-           * strings and defb.
-           */
-          int current_bytesize = 0;
-          dblock *db = NULL;
-
-          while (current_bytesize < defscnt) {
-            /* Need to populate all the childdren */
-            if (*inner == ',') {
-              inner++;
-              while (*inner==' ' || *inner=='\t')
-                inner++;
-            }
-            else
-              general_error(6,',');  /* , expected */
-
-            if (*inner=='\'' || *inner=='\"') {  /* we read a string */
-              db = parse_string(&inner, *inner,8);
-              if (db) {
-                if (current_bytesize+db->size > defscnt) {
-                  general_error(51); /* wrong size */
-                  return;
-                }
-                else {
-                  int i;
-
-                  for (i=0; i<db->size; i++) {
-                    array_content[current_bytesize] = db->data[i];
-                    current_bytesize++;
-                  }
-                  myfree(db->data);
-                  myfree(db);
-                }
-              }  
-              else {  /* string parsing failed */
-                general_error(50);
-                return;
-              }
-            }
-            else {
-              /* it was not a string, need to see if it is a number */
-              taddr byte = parse_constexpr(&inner);
-
-              if ((unsigned int)byte > 255) {
-                general_error(51); /* size mismatch (we can store only bytes) */
-                return;
-              }
-              array_content[current_bytesize] = byte;
-              current_bytesize++;
-            }
-
-            while(*inner==' ' || *inner=='\t')
-              inner++;
-          }
-
-          while (*inner=='\r' || *inner=='\n')
-            inner++;
-        }
-      }  
-      else {
-        inner++;
-        def = 0;
-      }
-
-      /* create the new field */
-      field = mymalloc(sizeof(structfield));
-      field->name    = id;
-      field->bitsize = bitsize;  /* 0 for an array */
-      field->isarray = isarray;
-      if (isarray)
-        field->content.defarray = array_content;
-      else
-        field->content.defval = def;
-      field->next = NULL;
-
-      /* add the new field to the structure*/
-      if (cur_field==NULL)
-        cur_struct->field = field;
-      else
-        cur_field->next = field;
-
-      cur_field = field;
-    }
-
-    label = new_abs(cur_struct->name, number_expr(cur_struct->length/8));
-
-    for (base=0,field=cur_struct->field; field!=NULL; field=field->next) {
-      char *local_name, *full_name;
-
-      local_name = mymalloc(sizeof(char) * (strlen(field->name)+2));
-      local_name[0] = '.';
-      strcpy(local_name+1, field->name);
-      full_name = make_local_label(cur_struct->name,
-                                   strlen(cur_struct->name),
-                                   local_name, 
-                                   strlen(local_name));
-      myfree(local_name);
-
-      label = new_abs(full_name, number_expr(base));
-      base += field->bitsize/8;
-    }
-
-    cur_struct = NULL;
+  if (cur_struct) {
+    general_error(48);  /* cannot declare structure within structure */
+    return 0;
   }
-  else
-    ierror(0);
+
+  struct_prevsect = current_section;
+  switch_offset_section(name,-1);
+  data.ptr = cur_struct = current_section;
+  add_hashentry(structhash,cur_struct->name,data);
+  return 1;
+}
+
+/* Finish the structure definition and return the previous section. */
+int end_structure(section **prev)
+{
+  if (cur_struct) {
+    *prev = struct_prevsect;
+    cur_struct = struct_prevsect = NULL;
+    return 1;
+  }
+  general_error(49);  /* no structure */
+  return 0;
 }
 
 
-char *read_next_line(void)
+section *find_structure(char *name,int name_len)
+{
+  hashdata data;
+  section *s;
+
+  if (find_namelen(structhash,name,name_len,&data))
+    s = data.ptr;
+  else
+    s = NULL;
+  return s;
+}
+
+
 /* reads the next input line */
+char *read_next_line(void)
 {
   char *s,*srcend,*d;
   int nparam;
@@ -1083,8 +779,8 @@ char *read_next_line(void)
   nparam = cur_src->num_params;
 
   if (enddir_list!=NULL && (srcend-s)>enddir_minlen) {
-    /* reading a definition, like a structure, a macro or a repeat-block,
-       until an end directive is found */
+    /* reading a definition, like a macro or a repeat-block, until an
+       end directive is found */
     struct namelen *dir;
     int rept_nest = 1;
 
@@ -1093,17 +789,8 @@ char *read_next_line(void)
 
     while (s <= (srcend-enddir_minlen)) {
       if (dir = dirlist_match(s,srcend,enddir_list)) {
-        /* TODO better to use the semantic of the end in order to know what
-           is ending. Because this code is able to end a macro instead
-           of a repeat. */
         if (cur_macro != NULL) {
           add_macro();  /* link macro-definition into hash-table */
-          s += dir->len;
-          enddir_list = NULL;
-          break;
-        }
-        else if (cur_struct != NULL) {
-          add_structure();  /* link structure-definition into hash-table */
           s += dir->len;
           enddir_list = NULL;
           break;
@@ -1115,7 +802,7 @@ char *read_next_line(void)
           break;
         }
       }
-      else if (cur_macro==NULL && cur_struct==NULL && reptdir_list!=NULL &&
+      else if (cur_macro==NULL && reptdir_list!=NULL &&
                (dir = dirlist_match(s,srcend,reptdir_list)) != NULL) {
         s += dir->len;
         rept_nest++;
@@ -1148,8 +835,6 @@ char *read_next_line(void)
     if (enddir_list) {
       if (cur_macro)
         general_error(25,cur_macro->name);  /* missing ENDM directive */
-      else if (cur_struct)
-        general_error(48);                  /* missing ENDSTRUCT directive */
       else
         general_error(32);  /* missing ENDR directive */
     }

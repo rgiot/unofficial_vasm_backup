@@ -49,7 +49,7 @@ int ext_find_base(symbol **base,expr *p,section *sec,taddr pc)
 
   if (p->type==LOBYTE || p->type==HIBYTE) {
     modifier = p->type;
-    return find_base(base,p->left,sec,pc);
+    return find_base(p->left,base,sec,pc);
   }
   modifier = 0;
   return BASE_ILLEGAL;
@@ -175,7 +175,7 @@ static void optimize_instruction(instruction *ip,section *sec,
       else {
         symbol *base;
         
-        if (find_base(&base,op->value,sec,pc) == BASE_OK) {
+        if (find_base(op->value,&base,sec,pc) == BASE_OK) {
           if (op->type==REL && base->type==LABSYM && base->sec==sec) {
             taddr bd = val - (pc + 2);
     
@@ -293,7 +293,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
     if (op->value != NULL) {
       if (!eval_expr(op->value,&val,sec,pc)) {
         modifier = 0;
-        if (find_base(&base,op->value,sec,pc) == BASE_OK) {
+        if (find_base(op->value,&base,sec,pc) == BASE_OK) {
           if (optype==REL && base->type==LABSYM && base->sec==sec) {
             /* relative branch requires no relocation */
             val = val - (pc + 2);
@@ -329,7 +329,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
                 ierror(0);
                 break;
             }
-            rl = add_reloc(&db->relocs,base,val,type,size,offs);
+            rl = add_nreloc(&db->relocs,base,val,type,size,offs);
             switch (modifier) {
               case LOBYTE:
                 ((nreloc *)rl->reloc)->mask = 0xff;
@@ -404,10 +404,10 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
     rlist *rl;
     
     modifier = 0;
-    btype = find_base(&base,op->value,sec,pc);
+    btype = find_base(op->value,&base,sec,pc);
     if (btype==BASE_OK || (btype==BASE_PCREL && modifier==0)) {
-      rl = add_reloc(&db->relocs,base,val,
-                     btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
+      rl = add_nreloc(&db->relocs,base,val,
+                      btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
       switch (modifier) {
         case LOBYTE:
           ((nreloc *)rl->reloc)->mask = 0xff;

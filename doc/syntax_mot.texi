@@ -3,7 +3,7 @@ M68k family of CPUs, which is available with the extension @code{mot}.
 
 @section Legal
 
-    This module is copyright in 2002-2012 by Frank Wille.
+    This module is copyright in 2002-2013 by Frank Wille.
 
     This archive may be redistributed without modifications and used
     for non-commercial purposes.
@@ -149,6 +149,14 @@ CPU- and output-module support them):
 
 @item bss_f
       Equivalent to @code{section bss_f,bss,fast}.
+
+@item cargs [#<offset>,]<symbol1>[.<size1>][,<symbol2>[.<size2>]]...
+      Defines <symbol1> with the value of <offset>. Further symbols
+      on the line, separated by comma, will be assigned the <offset> plus
+      the size of the previous symbol. The size defaults to 2. Valid
+      optional size extensions are: @code{.b}, @code{.w}, @code{.l},
+      where @code{.l} results in a size of 4, the others 2.
+      The <offset> argument defaults to 4, when not given.
 
 @item clrfo
       Reset stack-frame offset counter to zero. See @code{fo} directive.
@@ -437,6 +445,14 @@ CPU- and output-module support them):
 
 @item odd
       Aligns to an odd address. Equivalent to @code{cnop 1,2}.
+
+@item offset [<expression>]
+      Switches to a special offset-section. The contents of such a section
+      is not included in the output. Their labels may be referenced as
+      absolute offset symbols. Can be used to define structure offsets.
+      The optional <expression> gives the start offset for this section.
+      When missing the last offset of the previous offset-section is used,
+      or 0.
 
 @item org <expression>
       Sets the base address for the subsequent code.

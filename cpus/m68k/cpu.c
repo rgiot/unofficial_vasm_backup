@@ -1131,7 +1131,7 @@ static void check_basereg(operand *op)
    from the operand's displacement value. */
 {
   if (op->reg>=0 && op->reg<=6 && baseexp[op->reg] && op->exp.value[0]) {
-    if (find_base(NULL,op->exp.value[0],NULL,0) == BASE_OK) {
+    if (find_base(op->exp.value[0],NULL,NULL,0) == BASE_OK) {
       expr *new = make_expr(SUB,op->exp.value[0],copy_tree(baseexp[op->reg]));
 
       simplify_expr(new);
@@ -1781,7 +1781,7 @@ static void eval_oper(operand *op,section *sec,taddr pc,int final)
     op->base[i] = NULL;
     if ((op->flags&FL_expMask)==FL_Exp && op->exp.value[i]!=NULL) {
       if (!eval_expr(op->exp.value[i],&op->extval[i],sec,pc)) {
-        op->basetype[i] = find_base(&op->base[i],op->exp.value[i],sec,pc);
+        op->basetype[i] = find_base(op->exp.value[i],&op->base[i],sec,pc);
         if (final && op->basetype[i]==BASE_ILLEGAL)
           general_error(38);  /* illegal relocation */
       }
@@ -3922,24 +3922,23 @@ static unsigned char *write_branch(dblock *db,unsigned char *d,operand *op,
     if (op->base[0]->type == IMPORT || op->base[0]->sec!=sec) {
       /* external branch label, or label from different section */
       taddr addend = op->extval[0];
-      nreloc *r = new_nreloc();
-      rlist *rl = mymalloc(sizeof(rlist));
+      int size,offset;
 
       switch (ext) {
         case 'b':
         case 's':
           addend--;   /* reloc-offset is stored 1 byte before PC-location */
           *(d-1) = addend & 0xff;
-          r->size = 8;
-          r->offset = 8;
+          size = 8;
+          offset = 8;
           break;
         case 'l':
           if (cpu_type & (m68020up|cpu32|mcfb|mcfc|m68881|m68882|m68851)) {
             if (bcc)
               *(d-1) = 0xff;
-            r->offset = (d - (unsigned char *)db->data) << 3;
+            offset = (d - (unsigned char *)db->data) << 3;
             d = setval(1,d,4,addend);
-            r->size = 32;
+            size = 32;
           }
           else
             cpu_error(0);  /* instruction not supported */
@@ -3947,20 +3946,15 @@ static unsigned char *write_branch(dblock *db,unsigned char *d,operand *op,
         case 'w':
           if (bcc)
             *(d-1) = 0;
-          r->offset = (d - (unsigned char *)db->data) << 3;
+          offset = (d - (unsigned char *)db->data) << 3;
           d = setval(1,d,2,addend);
-          r->size = 16;
+          size = 16;
           break;
         default:
           cpu_error(34);  /* illegal opcode extension */
           break;
       }
-      r->sym = op->base[0];
-      r->addend = addend;
-      rl->type = REL_PC;
-      rl->reloc = r;
-      rl->next = db->relocs;
-      db->relocs = rl;
+      add_nreloc(&db->relocs,op->base[0],addend,REL_PC,size,offset);
     }
 
     else {  /* known label from same section, can be resolved immediately */
@@ -4313,13 +4307,13 @@ static unsigned char *write_ea_ext(dblock *db,unsigned char *d,operand *op,
     if (rtype != REL_NONE) {
       if (rtype==REL_ABS && op->basetype[0]==BASE_PCREL)
         rtype = REL_PC;
-      add_reloc(&db->relocs,op->base[0],op->extval[0],rtype,rsize,roffs);
+      add_nreloc(&db->relocs,op->base[0],op->extval[0],rtype,rsize,roffs);
     }
     if (ortype != REL_NONE) {
       if (ortype==REL_ABS && op->basetype[1]==BASE_PCREL)
         ortype = REL_PC;
-      add_reloc(&db->relocs,op->base[1],op->extval[1],ortype,orsize,
-                (rtype==REL_NONE) ? roffs : roffs+rsize);
+      add_nreloc(&db->relocs,op->base[1],op->extval[1],ortype,orsize,
+                 (rtype==REL_NONE) ? roffs : roffs+rsize);
     }
   }
   return d;
@@ -4629,7 +4623,7 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
   db->data = mymalloc(db->size);
   if (dtype==FL_Exp && op->exp.value[0]!=NULL) {
     if (!eval_expr(op->exp.value[0],&val,sec,pc)) {
-      btype = find_base(&base,op->exp.value[0],sec,pc);
+      btype = find_base(op->exp.value[0],&base,sec,pc);
       if (btype == BASE_ILLEGAL)
         general_error(38);  /* illegal relocation */
     }
@@ -4711,7 +4705,7 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
 
   if (base) {
     /* relocation required */
-    add_reloc(&db->relocs,base,val,btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
+    add_nreloc(&db->relocs,base,val,btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
   }
 
   return db;
@@ -5258,7 +5252,7 @@ char *parse_cpu_special(char *start)
         db->data[0] = 0x41 | (sdreg << 1);  /* LEA _LinkerDB,An */
         db->data[1] = 0xf9;
         memset(&db->data[2],0,4);
-        add_reloc(&db->relocs,new_import("_LinkerDB"),0,REL_ABS,32,16);
+        add_nreloc(&db->relocs,new_import("_LinkerDB"),0,REL_ABS,32,16);
         add_atom(0,new_data_atom(db,2));
       }
       else

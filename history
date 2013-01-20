@@ -6,9 +6,16 @@ o The vasm core supports structure definitions. A structure name can
   either be used as a directive to initialize data, or in expressions
   as the structure's size. Its fields are available as local labels to
   the global structure name, defining the field offsets.
-  (Contributed by Romain Giot.)
-o oldstyle-syntax: struct and endstruct directives for supporting
+  (Originally contributed by Romain Giot, modified by Frank Wille.)
+o The vasm core supports the creation of offsets sections. The contents
+  of such a section is not included in the output file and their labels
+  can be referenced as absolute offset symbols.
+o PPC: Register symbols are no longer exported into most object formats.
+o oldstyle-syntax: STRUCT and ENDSTRUCT directives for supporting
   structures.
+o mot-syntax: Devpac-compatible CARGS directive.
+o mot-syntax: New directive OFFSET. Devpac-compatible, but additionally to
+  Devpac it allows any directive or instruction within such a section.
 
 - 1.6 (29.12.12)
 o New instruction/operand parser. Can handle instruction availability,

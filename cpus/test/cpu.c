@@ -167,17 +167,11 @@ static char *fill_operand(operand *p,section *sec,taddr pc,char *d,rlist **reloc
     return d;
   /* FIXME: Test for valid operand, create reloc */
   if(!eval_expr(p->offset,&val,sec,pc)){
-    nreloc *reloc=new_nreloc();
-    rlist *rl=mymalloc(sizeof(*rl));
-    rl->type=REL_ABS;
-    reloc->offset=roffset*8;
-    reloc->size=16;
-    if (find_base(&reloc->sym,p->offset,sec,pc)!=BASE_OK){
+    symbol *base;
+    if (find_base(p->offset,&base,sec,pc)!=BASE_OK){
       general_error(38);
     }else{
-      rl->reloc=reloc;
-      rl->next=*relocs;
-      *relocs=rl;
+      add_nreloc(&db->relocs,base,0,REL_ABS,16,roffset*8);
     }
   }
   *d++=val>>24;

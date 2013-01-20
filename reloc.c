@@ -15,8 +15,8 @@ nreloc *new_nreloc(void)
 }
 
 
-rlist *add_reloc(rlist **relocs,symbol *sym,taddr addend,
-                 int type,int size,int offs)
+rlist *add_nreloc(rlist **relocs,symbol *sym,taddr addend,
+                  int type,int size,int offs)
 {
   nreloc *r = new_nreloc();
   rlist *rl = mymalloc(sizeof(rlist));
@@ -30,6 +30,18 @@ rlist *add_reloc(rlist **relocs,symbol *sym,taddr addend,
   rl->next = *relocs;
   *relocs = rl;
   return rl;
+}
+
+
+rlist *add_nreloc_masked(rlist **relocs,symbol *sym,taddr addend,
+                         int type,int size,int offs,taddr mask)
+{
+  rlist *rl;
+  nreloc *r;
+
+  rl = add_nreloc(relocs,sym,addend,type,size,offs);
+  r = rl->reloc;
+  r->mask = mask;
 }
 
 

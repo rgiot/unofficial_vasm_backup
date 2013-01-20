@@ -162,15 +162,15 @@ static taddr space_size(sblock *sb,section *sec,taddr pc)
       taddr fill,i;
 
       if (!eval_expr(sb->fill_exp,&fill,sec,pc)) {
-        if (find_base(&base,sb->fill_exp,sec,pc)==BASE_ILLEGAL)
+        if (find_base(sb->fill_exp,&base,sec,pc)==BASE_ILLEGAL)
           general_error(38);  /* illegal relocation */
       }
       copy_cpu_taddr(sb->fill,fill,sb->size);
       if (base && !sb->relocs) {
         /* generate relocations */
         for (i=0; i<space; i++)
-          add_reloc(&sb->relocs,base,fill,REL_ABS,
-                    sb->size<<3,(i*sb->size)<<3);
+          add_nreloc(&sb->relocs,base,fill,REL_ABS,
+                     sb->size<<3,(i*sb->size)<<3);
       }
     }
     else
@@ -349,6 +349,19 @@ void print_atom(FILE *f,atom *p)
     default:
       ierror(0);
   }
+}
+
+
+atom *clone_atom(atom *a)
+{
+  atom *new = mymalloc(sizeof(*new));
+
+  memcpy(new,a,sizeof(atom));
+  new->next = 0;
+  new->src = NULL;
+  new->line = 0;
+  new->list = NULL;
+  return new;
 }
 
 

@@ -101,6 +101,32 @@ void fail(char *msg)
   general_error(19,msg);
 }
 
+/* Removes all unallocated (offset) sections from the list and converts
+   their label symbols into absolute expressions. */
+static void remove_unalloc_sects(void)
+{
+  section *prev,*sec;
+  symbol *sym;
+
+  for (sym=first_symbol; sym; sym=sym->next) {
+    if (sym->type==LABSYM && (sym->sec->flags&UNALLOCATED)) {
+      sym->type = EXPRESSION;
+      sym->expr = number_expr(sym->pc);
+      sym->sec = NULL;
+    }
+  }
+  for (sec=first_section,prev=NULL; sec; sec=sec->next) {
+    if (sec->flags&UNALLOCATED) {
+      if (prev)
+        prev->next = sec->next;
+      else
+        first_section = sec->next;
+    }
+    else
+      prev = sec;
+  }
+}
+
 static void resolve_section(section *sec)
 {
   atom *p;
@@ -184,6 +210,7 @@ static void assemble(void)
   char *attr;
   int bss;
 
+  remove_unalloc_sects();
   final_pass=1;
   for(sec=first_section;sec;sec=sec->next){
     source *lasterrsrc=NULL;
@@ -721,7 +748,7 @@ void new_org(taddr org)
   section *sec;
 
   sprintf(buf,"seg%llx",UNS_TADDR(org));
-  sec = new_section(mystrdup(buf),"acrwx",1);
+  sec = new_section(buf,"acrwx",1);
   sec->org = sec->pc = org;
   current_section = sec;
 #if HAVE_CPU_OPTS
@@ -742,6 +769,31 @@ void switch_section(char *name,char *attr)
     current_section=p;
 #if HAVE_CPU_OPTS
   cpu_opts_init(p);  /* set initial cpu opts before the first atom */
+#endif
+}
+
+/* Switches current section to an offset section. Create a new section when
+   it doesn't exist yet or needs a different offset. */
+void switch_offset_section(char *name,taddr offs)
+{
+  static unsigned long id;
+  char unique_name[14];
+  section *sec;
+
+  if (!name) {
+    if (offs != -1)
+      ++id;
+    sprintf(unique_name,"OFFSET%06lu",id);
+    name = unique_name;
+  }
+  sec = new_section(name,"u",1);
+  sec->flags |= UNALLOCATED;
+  if (offs != -1)
+    sec->org = sec->pc = offs;
+  myfree(name);
+  current_section = sec;
+#if HAVE_CPU_OPTS
+  cpu_opts_init(sec);  /* set initial cpu opts before the first atom */
 #endif
 }
 
@@ -900,7 +952,7 @@ symbol *new_import(char *name)
 
 symbol *new_labsym(section *sec,char *name)
 {
-  symbol *new=find_symbol(name);
+  symbol *new;
   int add;
 
   if(!sec){
@@ -911,7 +963,9 @@ symbol *new_labsym(section *sec,char *name)
     }
   }
   sec->flags|=HAS_SYMBOLS;
-  if(new){
+  if(sec->flags&LABELS_ARE_LOCAL)
+    name=make_local_label(sec->name,strlen(sec->name),name,strlen(name));
+  if(new=find_symbol(name)){
     if(new->type!=IMPORT){
       symbol *old = new;
       new=mymalloc(sizeof(*new));
@@ -921,7 +975,10 @@ symbol *new_labsym(section *sec,char *name)
     add=0;
   }else{
     new=mymalloc(sizeof(*new));
-    new->name=mystrdup(name);
+    if(sec->flags&LABELS_ARE_LOCAL)
+      new->name=name;
+    else
+      new->name=mystrdup(name);
     add=1;
   }
   new->type=LABSYM;
@@ -953,7 +1010,7 @@ symbol *internal_abs(char *name)
 
   if (new) {
     if (new->type!=EXPRESSION || (new->flags&(EXPORT|COMMON|WEAK)))
-      syntax_error(37,name);  /* internal symbol redefined by user */
+      general_error(37,name);  /* internal symbol redefined by user */
   }
   else {
     new = new_abs(name,number_expr(0));

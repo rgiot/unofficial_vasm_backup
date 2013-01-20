@@ -216,24 +216,6 @@ static int add_seg_prefix(instruction *ip,int segrn)
 }
 
 
-static void addreloc(rlist **relocs,symbol *sym,taddr addend,
-                     int type,int offs,int size,taddr mask)
-{
-  nreloc *r = new_nreloc();
-  rlist *rl = mymalloc(sizeof(rlist));
-
-  r->offset = offs;
-  r->size = size;
-  r->mask = mask;
-  r->sym = sym;
-  r->addend = addend;
-  rl->type = type;
-  rl->reloc = r;
-  rl->next = *relocs;
-  *relocs = rl;
-}
-
-
 static char suffix_from_reg(instruction *ip)
 {
   int i,ot;
@@ -722,7 +704,7 @@ static void optimize_jump(instruction *ip,operand *op,section *sec,
   taddr val,diff;
 
   if (!eval_expr(op->value,&val,sec,pc)) {
-    if (find_base(&base,op->value,sec,pc) != BASE_OK) {
+    if (find_base(op->value,&base,sec,pc) != BASE_OK) {
       general_error(38);  /* illegal relocation */
       return;
     }
@@ -1353,7 +1335,7 @@ static unsigned char *output_disp(dblock *db,unsigned char *d,
           mnemonic *mnemo = &mnemonics[ip->code];
           symbol *base;
 
-          if (find_base(&base,op->value,sec,pc) == BASE_OK) {
+          if (find_base(op->value,&base,sec,pc) == BASE_OK) {
             if ((mnemo->ext.opcode_modifier & (Jmp|JmpByte|JmpDword))
                 || (op->flags & OPER_PCREL)) {
               /* handle pc-relative displacement for jumps */
@@ -1362,14 +1344,14 @@ static unsigned char *output_disp(dblock *db,unsigned char *d,
               }
               else {
                 val -= bits>>3;
-                addreloc(&db->relocs,base,val,REL_PC,
-                         (int)(d-(unsigned char *)db->data)<<3,bits,-1);
+                add_nreloc(&db->relocs,base,val,REL_PC,bits,
+                           (int)(d-(unsigned char *)db->data)<<3);
               }
             }
             else {
               /* reloc for a normal absolute displacement */
-              addreloc(&db->relocs,base,val,REL_ABS,
-                       (int)(d-(unsigned char *)db->data)<<3,bits,-1);
+              add_nreloc(&db->relocs,base,val,REL_ABS,bits,
+                         (int)(d-(unsigned char *)db->data)<<3);
             }
           }
           else
@@ -1408,9 +1390,9 @@ static unsigned char *output_imm(dblock *db,unsigned char *d,
         if (!eval_expr(op->value,&val,sec,pc)) {
           symbol *base;
 
-          if (find_base(&base,op->value,sec,pc) == BASE_OK) {
-            addreloc(&db->relocs,base,val,REL_ABS,
-                     (int)(d-(unsigned char *)db->data)<<3,bits,-1);
+          if (find_base(op->value,&base,sec,pc) == BASE_OK) {
+            add_nreloc(&db->relocs,base,val,REL_ABS,bits,
+                       (int)(d-(unsigned char *)db->data)<<3);
           }
           else
             general_error(38);  /* illegal relocation */
@@ -1848,10 +1830,10 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
     symbol *base;
     int btype;
     
-    btype = find_base(&base,op->value,sec,pc);
+    btype = find_base(op->value,&base,sec,pc);
     if (base)
-      addreloc(&db->relocs,base,val,
-               btype==BASE_PCREL?REL_PC:REL_ABS,0,bitsize,-1);
+      add_nreloc(&db->relocs,base,val,bitsize,
+                 btype==BASE_PCREL?REL_PC:REL_ABS,0);
     else
       general_error(38);  /* illegal relocation */
   }

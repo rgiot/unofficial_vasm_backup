@@ -12,7 +12,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm oldstyle syntax module 0.10a (c) 2002-2013 Frank Wille";
+char *syntax_copyright="vasm oldstyle syntax module 0.11 (c) 2002-2013 Frank Wille";
 
 static char textname[]=".text",textattr[]="acrx";
 static char dataname[]=".data",dataattr[]="adrw";
@@ -23,16 +23,10 @@ char commentchar=';';
 char *defsectname = textname;
 char *defsecttype = "acrwx";
 
-static char endsname[] = ".endstructure";
 static char endmname[] = ".endmacro";
 static char endrname[] = ".endrepeat";
 static char reptname[] = ".rept";
 static char repeatname[] = ".repeat";
-
-static struct namelen ends_dirlist[] = {
-  { 4,&endsname[1] }, { 8,&endsname[1] }, { 9,&endsname[1] },
-  { 12,&endsname[1] }, { 0,0 }
-};
 static struct namelen endm_dirlist[] = {
   { 4,&endmname[1] }, { 6,&endmname[1] }, { 8,&endmname[1] }, { 0,0 }
 };
@@ -42,11 +36,6 @@ static struct namelen rept_dirlist[] = {
 static struct namelen endr_dirlist[] = {
   { 4,&endrname[1] }, { 6,&endrname[1] }, { 9,&endrname[1] }, { 0,0 }
 };
-
-static struct namelen dends_dirlist[] = {
-  { 5,&endsname[0] }, { 9,&endsname[0] }, { 10,&endsname[0] },
-  { 13,&endsname[0] }, { 0,0 }
-};
 static struct namelen dendm_dirlist[] = {
   { 5,&endmname[0] }, { 7,&endmname[0] }, { 9,&endmname[0] }, { 0,0 }
 };
@@ -55,23 +44,6 @@ static struct namelen drept_dirlist[] = {
 };
 static struct namelen dendr_dirlist[] = {
   { 5,&endrname[0] }, { 7,&endrname[0] }, { 10,&endrname[0] }, { 0,0 }
-};
-
-static struct datalen typelen_list[] = {
-  { 8,"asc" },
-  { 8,"db" },
-  { 8,"defb" },
-  { 8,"byte" },
-  { 8,"data" },
-  { 16,"addr" },
-  { 16,"defw" },
-  { 16,"dfw" },
-  { 16,"dw" },
-  { 16,"wor" },
-  { 16,"word" },
-  { 0,"ds" },
-  { 0,"defs" },
-  { -1,0 }
 };
 
 static int dotdirectives = 0;
@@ -743,27 +715,6 @@ static void handle_endm(char *s)
 }
 
 
-static void handle_struct(char *s)
-{
-  char *name;
-  
-  if (name = parse_identifier(&s)) {
-    s = skip(s);
-    eol(s);
-    new_structure(name,dotdirectives?dends_dirlist:ends_dirlist,s);
-    myfree(name);
-  }
-  else
-    syntax_error(10);  /* identifier expected */
-}
-
-
-static void handle_endstruct(char *s)
-{
-  syntax_error(23); /* unexpected endstruct without structure*/
-}
-
-
 static void handle_defc(char *s)
 {
   char *name;
@@ -792,6 +743,39 @@ static void handle_list(char *s)
 static void handle_nolist(char *s)
 {
   set_listing(0);
+}
+
+
+static void handle_struct(char *s)
+{
+  char *name;
+
+  if (name = parse_identifier(&s)) {
+    s = skip(s);
+    eol(s);
+    if (new_structure(name))
+      current_section->flags |= LABELS_ARE_LOCAL;
+    myfree(name);
+  }
+  else
+    syntax_error(10);  /* identifier expected */
+}
+
+
+static void handle_endstruct(char *s)
+{
+  section *prevsec;
+  symbol *szlabel;
+
+  if (end_structure(&prevsec)) {
+    /* create the structure name as label defining the structure size */
+    current_section->flags &= ~LABELS_ARE_LOCAL;
+    szlabel = new_labsym(0,current_section->name);
+    add_atom(0,new_label_atom(szlabel));
+    /* end structure declaration by switching to previous section */
+    current_section = prevsec;
+  }
+  eol(s);
 }
 
 
@@ -886,7 +870,9 @@ struct {
   "list",handle_list,
   "nolist",handle_nolist,
   "struct",handle_struct,
+  "structure",handle_struct,
   "endstruct",handle_endstruct,
+  "endstructure",handle_endstruct,
 };
 
 int dir_cnt = sizeof(directives) / sizeof(directives[0]);
@@ -932,6 +918,108 @@ static int oplen(char *e,char *s)
   while(s!=e&&isspace((unsigned char)e[-1]))
     e--;
   return e-s;
+}
+
+
+/* When a structure with this name exists, insert its atoms and either
+   initialize with new values or accept its default values. */
+static int execute_struct(char *name,int name_len,char *s)
+{
+  section *str;
+  atom *p;
+
+  str = find_structure(name,name_len);
+  if (str == NULL)
+    return 0;
+
+  for (p=str->first; p; p=p->next) {
+    atom *new;
+    char *opp;
+    int opl;
+
+    if (p->type==DATA || p->type==SPACE || p->type==DATADEF) {
+      opp = s = skip(s);
+      s = skip_operand(s);
+      opl = oplen(s,opp);
+
+      if (opl > 0) {
+        /* initialize this atom with a new expression */
+
+        if (p->type == DATADEF) {
+          /* parse a new data operand of the declared bitsize */
+          operand *op;
+
+          op = new_operand();
+          if (parse_operand(opp,opl,op,
+                            DATA_OPERAND(p->content.defb->bitsize))) {
+            new = new_datadef_atom(p->content.defb->bitsize,op);
+            new->align = p->align;
+            add_atom(0,new);
+          }
+          else
+            syntax_error(8);  /* invalid data operand */
+        }
+        else if (p->type == SPACE) {
+          /* parse the fill expression for this space */
+          new = clone_atom(p);
+          new->content.sb = new_sblock(p->content.sb->space_exp,
+                                       p->content.sb->size,
+                                       parse_expr_tmplab(&opp));
+          new->content.sb->space = p->content.sb->space;
+          add_atom(0,new);
+        }
+        else {
+          /* parse constant data - probably a string, or a single constant */
+          dblock *db;
+
+          db = new_dblock();
+          db->size = p->content.db->size;
+          db->data = db->size ? mycalloc(db->size) : NULL;
+          if (db->data) {
+            if (*opp=='\"' || *opp=='\'') {
+              dblock *strdb;
+
+              strdb = parse_string(&opp,*opp,8);
+              if (strdb->size) {
+                if (strdb->size > db->size)
+                  syntax_error(24,strdb->size-db->size);  /* cut last chars */
+                memcpy(db->data,strdb->data,
+                       strdb->size > db->size ? db->size : strdb->size);
+                myfree(strdb->data);
+              }
+              myfree(strdb);
+            }
+            else {
+              taddr val = parse_constexpr(&opp);
+              void *p;
+
+              if (db->size > sizeof(taddr) && BIGENDIAN)
+                p = db->data + db->size - sizeof(taddr);
+              else
+                p = db->data;
+              setval(BIGENDIAN,p,sizeof(taddr),val);
+            }
+          }
+          add_atom(0,new_data_atom(db,p->align));
+        }
+      }
+      else {
+        /* empty: use default values from original atom */
+        add_atom(0,clone_atom(p));
+      }
+
+      s = skip(s);
+      if (*s == ',')
+        s++;
+    }
+    else if (p->type == INSTRUCTION)
+      syntax_error(23);  /* skipping instruction in struct init */
+
+    /* other atoms are silently ignored */
+  }
+
+  eol(s);
+  return 1;
 }
 
 
@@ -1047,20 +1135,6 @@ void parse(void)
         myfree(labname);
         continue;
       }
-      else if (!strnicmp(s,"struct",6) &&
-               (isspace((unsigned char)*(s+6)) || *(s+6)=='\0') ||
-               !strnicmp(s,"structure",9) &&
-               (isspace((unsigned char)*(s+9)) || *(s+9)=='\0')) {
-        char *params = skip(s + (*(s+6)=='r'?9:6));
-
-        s = line;
-        myfree(labname);
-        if (!(labname = parse_identifier(&s)))
-          ierror(0);
-        new_structure(labname,dotdirectives?dends_dirlist:ends_dirlist,params);
-        myfree(labname);
-        continue;
-      }
       else {
         /* it's just a label */
         label = new_labsym(0,labname);
@@ -1114,7 +1188,7 @@ void parse(void)
 
     if (execute_macro(inst,inst_len,ext,ext_len,ext_cnt,s,clev))
       continue;
-    if (execute_struct(inst,inst_len,ext,ext_len,ext_cnt,s,clev))
+    if (execute_struct(inst,inst_len,s))
       continue;
 
     /* read operands, terminated by comma (unless in parentheses)  */
@@ -1233,26 +1307,28 @@ char *get_local_label(char **start)
 /* Local labels start with a '.' or end with '$': "1234$", ".1" */
 {
   char *s,*p,*name;
-  int globlen = 0;
 
   name = NULL;
   s = *start;
   p = skip_local(s);
 
-  if (p!=NULL && *p=='.' && ISIDSTART(*s) && *s!='.' && *(p-1)!='$') {
+  if (p!=NULL && *p=='.' && ISIDCHAR(*(p+1)) &&
+      ISIDSTART(*s) && *s!='.' && *(p-1)!='$') {
     /* skip local part of global.local label */
-    globlen = p - s;
-    s = p;
+    s = p + 1;
     p = skip_local(p);
+    name = make_local_label(*start,(s-1)-*start,s,p-s);
+    *start = skip(p);
   }
-
-  if (p!=NULL && p>(s+1) && *s=='.') {  /* .label */
-    name = make_local_label(*start,globlen,s,p-s);
+  else if (p!=NULL && p>(s+1) && *s=='.') {  /* .label */
+    s++;
+    name = make_local_label(NULL,0,s,p-s);
     *start = skip(p);
   }
   else if (p!=NULL && p>s && *p=='$') { /* label$ */
+    p++;
     name = make_local_label(NULL,0,s,p-s);
-    *start = skip(p+1);
+    *start = skip(p);
   }
 
   return name;
@@ -1278,8 +1354,6 @@ int init_syntax()
   /* means that \a..\z are disabled. \1..\9 still work in parallel. */
   namedmacparams = 1;
   maxmacparams = 36;
-
-  structure_type_lookup = typelen_list;
   return 1;
 }
 

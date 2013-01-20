@@ -710,7 +710,7 @@ int ext_find_base(symbol **base,expr *p,section *sec,taddr pc)
     }
     if (p->type==LOBYTE || p->type==HIBYTE) {
         modifier = p->type;
-        return find_base(base,p->left,sec,pc);
+        return find_base(p->left,base,sec,pc);
     }
     modifier = 0;
     return BASE_ILLEGAL;
@@ -1486,9 +1486,9 @@ static void write_opcode(mnemonic *opcode, dblock *db, int size, section *sec, t
             symbol *base;
             rlist *rl;
             modifier = 0;
-            if ( find_base(&base, indexit->value, sec, pc) == BASE_OK ) {
-                rl = add_reloc(&db->relocs, base, val, REL_ABS, 8,
-                               cbmode ? ((d-1)-start)*8 : (d-start)*8);
+            if ( find_base(indexit->value, &base, sec, pc) == BASE_OK ) {
+                rl = add_nreloc(&db->relocs, base, val, REL_ABS, 8,
+                                cbmode ? ((d-1)-start)*8 : (d-start)*8);
                 val = apply_modifier((nreloc *)rl->reloc, val);
             } else
                 general_error(38);  /* illegal relocation */
@@ -1512,14 +1512,14 @@ static void write_opcode(mnemonic *opcode, dblock *db, int size, section *sec, t
             symbol *base;
             rlist *rl;
             modifier = 0;
-            if ( find_base(&base, expr, sec, pc) == BASE_OK ) {
+            if ( find_base(expr, &base, sec, pc) == BASE_OK ) {
                 if ( opcode->ext.mode == TYPE_RELJUMP ) {
-                    add_reloc(&db->relocs, base, val -1, REL_PC, exprsize * 8, (d - start) * 8);
+                    add_nreloc(&db->relocs, base, val -1, REL_PC, exprsize * 8, (d - start) * 8);
                     val -= (pc + db->size);
                     if (modifier)
                         ierror(0);  /* @@@ Hi/Lo modifier makes no sense here? */
                 } else {
-                    rl = add_reloc(&db->relocs, base, val, REL_ABS, exprsize * 8, (d - start) * 8);
+                    rl = add_nreloc(&db->relocs, base, val, REL_ABS, exprsize * 8, (d - start) * 8);
                     val = apply_modifier((nreloc *)rl->reloc, val);
                 }
                 
@@ -1594,8 +1594,8 @@ static void rabbit_emu_call(instruction *ip,dblock *db,section *sec,taddr pc)
         expr = parse_expr(&t_expr);
         if ( eval_expr(expr, &val, sec, pc) == 0 ) {
             symbol *base;
-            if ( find_base(&base, expr, sec, pc) == BASE_OK )
-                add_reloc(&db->relocs,base, val, REL_ABS, 8, (d - start) * 8);
+            if ( find_base(expr, &base, sec, pc) == BASE_OK )
+                add_nreloc(&db->relocs,base, val, REL_ABS, 8, (d - start) * 8);
             else
                 general_error(38);  /* illegal relocation */
         } 
@@ -1607,8 +1607,8 @@ static void rabbit_emu_call(instruction *ip,dblock *db,section *sec,taddr pc)
     /* Evaluate the real expression */
     if ( eval_expr(ip->op[1]->value, &val, sec, pc) == 0 ) {
         symbol *base;
-        if ( find_base(&base, ip->op[1]->value, sec, pc) == BASE_OK )
-            add_reloc(&db->relocs,base, val, REL_ABS, 8, (d - start) * 8);
+        if ( find_base(ip->op[1]->value, &base, sec, pc) == BASE_OK )
+            add_nreloc(&db->relocs,base, val, REL_ABS, 8, (d - start) * 8);
         else
             general_error(38);  /* illegal relocation */
     } 
@@ -1647,10 +1647,10 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
         rlist *rl;
 
         modifier = 0;
-        btype = find_base(&base, op->value, sec, pc);
+        btype = find_base(op->value, &base, sec, pc);
         if ( btype == BASE_OK || ( btype == BASE_PCREL && modifier == 0 ) ) {
-            rl = add_reloc(&db->relocs, base, val,
-                           btype==BASE_PCREL ? REL_PC : REL_ABS, bitsize, 0);
+            rl = add_nreloc(&db->relocs, base, val,
+                            btype==BASE_PCREL ? REL_PC : REL_ABS, bitsize, 0);
             val = apply_modifier((nreloc *)rl->reloc,val);
         }
         else
@@ -1718,8 +1718,8 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
                     expr = parse_expr(&bufptr);
                     if ( eval_expr(expr, &val, sec, pc) == 0 ) {
                         symbol *base;
-                        if (find_base(&base,expr,sec,pc) == BASE_OK)
-                            add_reloc(&db->relocs,base, val, REL_ABS, 8,  8);
+                        if (find_base(expr, &base, sec, pc) == BASE_OK)
+                            add_nreloc(&db->relocs,base, val, REL_ABS, 8, 8);
                         else
                             general_error(38);  /* illegal relocation */
                     } 

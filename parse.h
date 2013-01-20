@@ -1,5 +1,5 @@
 /* parse.h - global parser support functions */
-/* (c) in 2009-2013 by Volker Barthelmann and Frank Wille */
+/* (c) in 2009-2012 by Volker Barthelmann and Frank Wille */
 
 #ifndef PARSE_H
 #define PARSE_H 
@@ -21,41 +21,13 @@ struct macro {
   struct macarg *argnames;
 };
 
-typedef struct structfield {
-  struct structfield *next; 
-  int bitsize; 
-  int isarray; 
-  union {
-    int defval;
-    char *defarray;
-  } content;
-  char *name;
-} structfield;
-
-typedef struct structure {
-  struct structure *next; 
-  structfield *field;
-  char *name;
-  char *text;
-  size_t size;
-  size_t length;
-} structure;
-
-/* allow to convert a datatype to a number of bits */
-struct datalen {
-  unsigned char bitlen;
-  char *name;
-};
-
 struct namelen {
   unsigned char len;
   char *name;
 };
 
-
 /* global variables */
 extern int esc_sequences,nocase_macros,maxmacparams,namedmacparams;
-extern struct datalen *structure_type_lookup;
 
 /* functions */
 char *escape(char *,char *);
@@ -70,7 +42,9 @@ void new_repeat(int,struct namelen *,struct namelen *);
 macro *new_macro(char *,struct namelen *,char *);
 int execute_macro(char *,int,char **,int *,int,char *,int);
 int leave_macro(void);
-structure *new_structure(char *,struct namelen *,char *);
+int new_structure(char *);
+int end_structure(section **);
+section *find_structure(char *,int);
 char *read_next_line(void);
 int init_parse(void);
 

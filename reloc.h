@@ -48,7 +48,8 @@ typedef struct rlist {
 
 
 nreloc *new_nreloc(void);
-rlist *add_reloc(rlist **,symbol *,taddr,int,int,int);
+rlist *add_nreloc(rlist **,symbol *,taddr,int,int,int);
+rlist *add_nreloc_masked(rlist **,symbol *,taddr,int,int,int,taddr);
 void do_pic_check(rlist *);
 taddr nreloc_real_addend(nreloc *);
 void unsupp_reloc_error(rlist *);

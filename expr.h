@@ -42,7 +42,7 @@ void free_expr(expr *);
 void simplify_expr(expr *);
 int eval_expr(expr *,taddr *,section *,taddr);
 void print_expr(FILE *,expr *);
-int find_base(symbol **,expr *,section *,taddr);
+int find_base(expr *,symbol **,section *,taddr);
 
 /* find_base return codes */
 #define BASE_ILLEGAL 0

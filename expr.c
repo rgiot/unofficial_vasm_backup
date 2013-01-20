@@ -597,8 +597,8 @@ int eval_expr(expr *tree,taddr *result,section *sec,taddr pc)
     val=(lval+rval);
     break;
   case SUB:
-    find_base(&lsym,tree->left,sec,pc);
-    find_base(&rsym,tree->right,sec,pc);
+    find_base(tree->left,&lsym,sec,pc);
+    find_base(tree->right,&rsym,sec,pc);
     /* l2-l1 is constant when both have a valid symbol-base, and both
        symbols are LABSYMs from the same section, e.g. (sym1+x)-(sym2-y) */
     if(cnst==0&&lsym!=NULL&&rsym!=NULL)
@@ -691,7 +691,7 @@ int eval_expr(expr *tree,taddr *result,section *sec,taddr pc)
         cpc->pc=pc;
       }
       val=tree->c.sym->pc;
-      cnst=0;
+      cnst=(sec->flags&UNALLOCATED)!=0;
     }else{
       /* IMPORT */
       cnst=0;
@@ -724,7 +724,7 @@ void print_expr(FILE *f,expr *p)
 /* Tests, if an expression is based only on one non-absolute
    symbol plus constants. Returns that symbol or zero.
    Note: Does not find all possible solutions. */
-int find_base(symbol **base,expr *p,section *sec,taddr pc)
+int find_base(expr *p,symbol **base,section *sec,taddr pc)
 {
   if(base)
     *base=NULL;
@@ -734,7 +734,7 @@ int find_base(symbol **base,expr *p,section *sec,taddr pc)
       cpc->pc=pc;
     }
     if(p->c.sym->type==EXPRESSION)
-      return find_base(base,p->c.sym->expr,sec,pc);
+      return find_base(p->c.sym->expr,base,sec,pc);
     else{
       if(base)
         *base=p->c.sym;
@@ -744,20 +744,20 @@ int find_base(symbol **base,expr *p,section *sec,taddr pc)
   if(p->type==ADD){
     taddr val;
     if(eval_expr(p->left,&val,sec,pc)&&
-       find_base(base,p->right,sec,pc)==BASE_OK)
+       find_base(p->right,base,sec,pc)==BASE_OK)
       return BASE_OK;
     if(eval_expr(p->right,&val,sec,pc)&&
-       find_base(base,p->left,sec,pc)==BASE_OK)
+       find_base(p->left,base,sec,pc)==BASE_OK)
       return BASE_OK;
   }
   if(p->type==SUB){
     taddr val;
     symbol *pcsym;
     if(eval_expr(p->right,&val,sec,pc)&&
-       find_base(base,p->left,sec,pc)==BASE_OK)
+       find_base(p->left,base,sec,pc)==BASE_OK)
       return BASE_OK;
-    if(find_base(base,p->left,sec,pc)==BASE_OK&&
-       find_base(&pcsym,p->right,sec,pc)==BASE_OK) {
+    if(find_base(p->left,base,sec,pc)==BASE_OK&&
+       find_base(p->right,&pcsym,sec,pc)==BASE_OK) {
       if(pcsym->type==LABSYM&&pcsym->sec==sec&&
          ((*base)->type==LABSYM||(*base)->type==IMPORT))
         return BASE_PCREL;

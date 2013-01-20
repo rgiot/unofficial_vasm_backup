@@ -546,18 +546,6 @@ int parse_operand(char *p,int len,operand *op,int optype)
 }
 
 
-static void addmaskedreloc(rlist **relocs,symbol *sym,taddr addend,
-                          int type,int offs,int size,taddr mask)
-{
-  rlist *rl;
-  nreloc *r;
-
-  rl = add_reloc(relocs,sym,addend,type,size,offs);
-  r = rl->reloc;
-  r->mask = mask;
-}
-
-
 static void create_mapping_symbol(int type,section *sec,taddr pc)
 /* create mapping symbol ($a, $t, $d) as required by ARM ELF ABI */
 {
@@ -615,7 +603,7 @@ taddr eval_thumb_operands(instruction *ip,section *sec,taddr pc,
 
     op = *(ip->op[opcnt]);
     if (!eval_expr(op.value,&val,sec,pc))
-      btype = find_base(&base,op.value,sec,pc);
+      btype = find_base(op.value,&base,sec,pc);
 
     /* do optimizations first */
 
@@ -659,15 +647,15 @@ taddr eval_thumb_operands(instruction *ip,section *sec,taddr pc,
           if (op.type == TBRHL) {
             val -= THB_PREFETCH;
             if (db) {
-              addmaskedreloc(&db->relocs,base,val,REL_PC,16+5,11,0xffe);
-              addmaskedreloc(&db->relocs,base,val,REL_PC,5,11,0x7ff000);
+              add_nreloc_masked(&db->relocs,base,val,REL_PC,11,16+5,0xffe);
+              add_nreloc_masked(&db->relocs,base,val,REL_PC,11,5,0x7ff000);
             }
           }
           else if (op.type == TPCLW) {
             /* val -= THB_PREFETCH;  @@@ only positive offsets allowed! */
             op.type = TUIMA;
             if (db)
-              addmaskedreloc(&db->relocs,base,val,REL_PC,8,8,0x3fc);
+              add_nreloc_masked(&db->relocs,base,val,REL_PC,8,8,0x3fc);
             base = NULL;  /* no more checks */
           }
           else if (insn)
@@ -791,9 +779,9 @@ taddr eval_thumb_operands(instruction *ip,section *sec,taddr pc,
         if (base!=NULL && db!=NULL) {
           if (btype == BASE_OK) {
             if (op.type==TUIM5 || op.type==TUI5I)
-              addmaskedreloc(&db->relocs,base,val,REL_ABS,5,5,0x1f);
+              add_nreloc_masked(&db->relocs,base,val,REL_ABS,5,5,0x1f);
             else if (op.type == TSWI8)
-              addmaskedreloc(&db->relocs,base,val,REL_ABS,8,8,0xff);
+              add_nreloc_masked(&db->relocs,base,val,REL_ABS,8,8,0xff);
             else
               cpu_error(6);  /* constant integer expression required */
           }
@@ -1095,7 +1083,7 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
 
     op = *(ip->op[opcnt]);
     if (!eval_expr(op.value,&val,sec,pc))
-      btype = find_base(&base,op.value,sec,pc);
+      btype = find_base(op.value,&base,sec,pc);
 
     /* do optimizations first */
 
@@ -1233,13 +1221,13 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
             case BRA24:
               val -= ARM_PREFETCH;
               if (db)
-                addmaskedreloc(&db->relocs,base,val,REL_PC,8,24,0x3fffffc);
+                add_nreloc_masked(&db->relocs,base,val,REL_PC,24,8,0x3fffffc);
               break;
             case PCL12:
               op.type = IMUD2;
               if (db) {
                 if (val<0x1000 && val>-0x1000) {
-                  addmaskedreloc(&db->relocs,base,val,REL_PC,20,12,0x1fff);
+                  add_nreloc_masked(&db->relocs,base,val,REL_PC,12,20,0x1fff);
                   base = NULL;  /* don't add another REL_ABS below */
                 }
                 else
@@ -1257,13 +1245,13 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
                 if (insn!=NULL && db!=NULL) {
                   *(insn+1) = *insn & ~0xf0000;
                   *(insn+1) |= (*insn&0xf000) << 4;
-                  addmaskedreloc(&db->relocs,base,val,REL_PC,24,8,0xff00);
-                  addmaskedreloc(&db->relocs,base,val,REL_PC,32+24,8,0xff);
+                  add_nreloc_masked(&db->relocs,base,val,REL_PC,8,24,0xff00);
+                  add_nreloc_masked(&db->relocs,base,val,REL_PC,8,32+24,0xff);
                 }
               }
               else if (val == 0) {  /* ADR */
                 if (db)
-                  addmaskedreloc(&db->relocs,base,val,REL_PC,24,8,0xff);
+                  add_nreloc_masked(&db->relocs,base,val,REL_PC,8,24,0xff);
               }
               else if (db)
                 cpu_error(22); /* operation not allowed on external symbols */
@@ -1388,7 +1376,7 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
               if (!aa4ldst) {
                 /* @@@ does this make any sense? */
                 *insn |= 0x00800000;  /* only UP */
-                addmaskedreloc(&db->relocs,base,val,REL_ABS,20,12,0xfff);
+                add_nreloc_masked(&db->relocs,base,val,REL_ABS,12,20,0xfff);
               }
               else
                 cpu_error(22); /* operation not allowed on external symbols */
@@ -1426,7 +1414,7 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
         if (val>=0 && val<0x1000000) {
           *insn |= val;
           if (base!=NULL && db!=NULL)
-            addmaskedreloc(&db->relocs,base,val,REL_ABS,8,24,0xffffff);
+            add_nreloc_masked(&db->relocs,base,val,REL_ABS,24,8,0xffffff);
         }
         else
           cpu_error(16);  /* 24-bit unsigned immediate expected */
@@ -1602,10 +1590,10 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
     symbol *base;
     int btype;
 
-    btype = find_base(&base,op->value,sec,pc);
+    btype = find_base(op->value,&base,sec,pc);
     if (base)
-      add_reloc(&db->relocs,base,val,
-                btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
+      add_nreloc(&db->relocs,base,val,
+                 btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
     else
       general_error(38);  /* illegal relocation */
   }

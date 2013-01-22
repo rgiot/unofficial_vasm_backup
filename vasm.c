@@ -109,7 +109,7 @@ static void remove_unalloc_sects(void)
   symbol *sym;
 
   for (sym=first_symbol; sym; sym=sym->next) {
-    if (sym->type==LABSYM && (sym->sec->flags&UNALLOCATED)) {
+    if (sym->type==LABSYM && sym->sec!=NULL && (sym->sec->flags&UNALLOCATED)) {
       sym->type = EXPRESSION;
       sym->expr = number_expr(sym->pc);
       sym->sec = NULL;
@@ -790,7 +790,6 @@ void switch_offset_section(char *name,taddr offs)
   sec->flags |= UNALLOCATED;
   if (offs != -1)
     sec->org = sec->pc = offs;
-  myfree(name);
   current_section = sec;
 #if HAVE_CPU_OPTS
   cpu_opts_init(sec);  /* set initial cpu opts before the first atom */

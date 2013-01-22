@@ -48,6 +48,7 @@ expr *curpc_expr(void)
   if(!cpc){
     cpc=new_import(" *current pc dummy*");
     cpc->type=LABSYM;
+    cpc->flags|=VASMINTERN;
   }
   new->type=SYM;
   new->c.sym=cpc;

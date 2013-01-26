@@ -42,6 +42,7 @@ rlist *add_nreloc_masked(rlist **relocs,symbol *sym,taddr addend,
   rl = add_nreloc(relocs,sym,addend,type,size,offs);
   r = rl->reloc;
   r->mask = mask;
+  return rl;
 }
 
 

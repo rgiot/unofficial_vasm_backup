@@ -354,9 +354,28 @@ void print_atom(FILE *f,atom *p)
 
 atom *clone_atom(atom *a)
 {
-  atom *new = mymalloc(sizeof(*new));
+  atom *new = mymalloc(sizeof(atom));
+  void *p;
 
   memcpy(new,a,sizeof(atom));
+
+  switch (a->type) {
+    /* INSTRUCTION and DATADEF have to be cloned as well, because they will
+       be deallocated and transformed into DATA during assemble() */
+    case INSTRUCTION:
+      p = mymalloc(sizeof(instruction));
+      memcpy(p,a->content.inst,sizeof(instruction));
+      new->content.inst = p;
+      break;
+    case DATADEF:
+      p = mymalloc(sizeof(defblock));
+      memcpy(p,a->content.defb,sizeof(defblock));
+      new->content.defb = p;
+      break;
+    default:
+      break;
+  }
+
   new->next = 0;
   new->src = NULL;
   new->line = 0;

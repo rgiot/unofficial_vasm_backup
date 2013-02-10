@@ -1,6 +1,6 @@
 /*
 ** cpu.c Motorola M68k, CPU32 and ColdFire cpu-description file
-** (c) in 2002-2012 by Frank Wille
+** (c) in 2002-2013 by Frank Wille
 */
 
 #include <math.h>
@@ -24,7 +24,7 @@ struct cpu_models models[] = {
 int model_cnt = sizeof(models)/sizeof(models[0]);
 
 
-char *cpu_copyright="vasm M68k/CPU32/ColdFire cpu backend 1.3c (c) 2002-2012 Frank Wille";
+char *cpu_copyright="vasm M68k/CPU32/ColdFire cpu backend 1.3d (c) 2002-2013 Frank Wille";
 char *cpuname = "M68k";
 int bitsperbyte = 8;
 int bytespertaddr = 4;
@@ -3391,36 +3391,20 @@ dontswap:
         ip->op[0] = ip->op[1];
         ip->op[1] = NULL;
       }
-      else if (val>=2 && val<=0x100 && cntones(val,9)==1) {
-        /* divu/divs.l #x,Dn -> lsr/asr.l #x,Dn */
-        ip->code = (mnemo->ext.opcode[1] & 0x0800) ? OC_ASRI : OC_LSRI;
+      else if (val>=2 && val<=0x100 && (mnemo->ext.opcode[1] & 0x0800)==0 &&
+               cntones(val,9)==1) {
+        /* divu.l #x,Dn -> lsr.l #x,Dn */
+        ip->code = OC_LSRI;
         val = bfffo(val,1,9);
         if (final) {
           free_expr(ip->op[0]->exp.value[0]);
           ip->op[0]->exp.value[0] = number_expr(val);
           if (warn_opts)
-            cpu_error(51,"divu/divs.l #x,Dn -> lsr/asr.l #x,Dn");
+            cpu_error(51,"divu.l #x,Dn -> lsr.l #x,Dn");
         }
         else
           ip->op[0]->flags |= FL_DoNotEval;
         ip->op[0]->extval[0] = val;
-      }
-      else if (val<=-2 && val>=-0x100 && (mnemo->ext.opcode[1] & 0x0800) &&
-               cntones(-val,9)==1) {
-        /* divs.l #-x,Dn -> asr.l #x,Dn + neg.l Dn */
-        ip->code = OC_ASRI;
-        val = bfffo(-val,1,9);
-        if (final) {
-          free_expr(ip->op[0]->exp.value[0]);
-          ip->op[0]->exp.value[0] = number_expr(val);
-          if (warn_opts)
-            cpu_error(51,"divs.l #-x,Dn -> asr.l #x,Dn + neg.l Dn");
-        }
-        else
-          ip->op[0]->flags |= FL_DoNotEval;
-        ip->op[0]->extval[0] = val;
-        ip->ext.un.copy.next = ip_singleop(OC_NEG,l_str,MODE_Dn,
-                                           ip->op[1]->reg,0,0,NULL);
       }
     }
   }

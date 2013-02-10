@@ -21,3 +21,4 @@
     "Unhandled operand type wanted 0x%x got 0x%x",ERROR, /* 20 */
     "Missed matched index registers on %s",ERROR,
     "Only out (c),0 is supported for the opcode %s",ERROR,
+    "Operations between different index registers are forbidden",ERROR,

@@ -3,7 +3,7 @@ microprocessor family.
 
 @section Legal
 
-    This module is copyright in 2002-2012 by Frank Wille.
+    This module is copyright in 2002-2013 by Frank Wille.
 
     This archive may be redistributed without modifications and used
     for non-commercial purposes.
@@ -151,8 +151,8 @@ This module provides the following additional options:
         require the @option{-opt-speed} flag.
 
     @item -opt-div
-        Immediate divisors, which are a power of two (from 2 to 256), are
-        optimized to shifts. Divisions by 1 are replaced by @code{TST.L Dn}
+        Unsigned immediate divisors, which are a power of two (from 2 to 256),
+        are optimized to shifts. Divisions by 1 are replaced by @code{TST.L Dn}
         (32-bit) or @code{MVZ.W Dn,Dn} (16-bit, ColdFire only). Divisions by
         -1 are replaced by @code{NEG.L Dn} (32-bit) or by a combination of
         @code{NEG.W Dn} and @code{MVZ.W Dn,Dn} (16-bit, ColdFire only).
@@ -716,12 +716,6 @@ ColdFire ISA_B/C (@code{-opt-div}).
 
 @item @code{DIVS.L #-1,Dn} optimized to @code{NEG.L Dn}
 (@code{-opt-div}).
-
-@item @code{DIVS.L #2..256,Dn} optimized to @code{ASR.L #x,Dn}
-(@code{-opt-div}).
-
-@item @code{DIVS.L #-2..-256,Dn} optimized to the sequence @code{ASR.L #x,Dn}
-and @code{NEG.L Dn} (@code{-opt-div}).
 
 @item @code{DIVU.L #2..256,Dn} optimized to @code{LSR.L #x,Dn}
 (@code{-opt-div}).

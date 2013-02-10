@@ -128,5 +128,9 @@ This module has the following error messages:
 @item 2018: %s specifier redundant for the opcode %s
 @item 2019: %s specifier has no effect on the opcode %s
 @item 2020: Operand value must evaluate to a constant for opcode %s
+@item 2021: Unhandled operand type wanted 0x%x got 0x%x
+@item 2022: Missed matched index registers on %s
+@item 2023: Only out (c),0 is supported for the opcode %s
+@item 2024: Operations between different index registers are forbidden
 @end itemize
 

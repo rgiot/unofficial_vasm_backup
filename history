@@ -10,7 +10,12 @@ o The vasm core supports structure definitions. A structure name can
 o The vasm core supports the creation of offsets sections. The contents
   of such a section is not included in the output file and their labels
   can be referenced as absolute offset symbols.
+o m68k: Division optimization (-opt-div, directive opt od) must not try
+  to optimize signed divisions, except with 1/-1. DIVS rounds towards
+  zero, while ASR rounds downwards.
 o PPC: Register symbols are no longer exported into most object formats.
+o z80: Forbid operations between different index registers, like ix/iy
+  pairs and ld ixl,(ix+0).
 o oldstyle-syntax: STRUCT and ENDSTRUCT directives for supporting
   structures.
 o mot-syntax: Devpac-compatible CARGS directive.

@@ -576,7 +576,7 @@ mnemonic mnemonics[] = {
 
 int mnemonic_cnt=sizeof(mnemonics)/sizeof(mnemonics[0]);
 
-char *cpu_copyright="vasm 8080/gbz80/z80/z180/rcmX000 cpu backend 0.2d (c) 2007,2009 Dominic Morris";
+char *cpu_copyright="vasm 8080/gbz80/z80/z180/rcmX000 cpu backend 0.2e (c) 2007,2009 Dominic Morris";
 char *cpuname = "z80";
 int bitsperbyte = 8;
 int bytespertaddr = 2;
@@ -1836,6 +1836,20 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
         }
         break;
     case TYPE_LD8:
+        /* ix/iy coubles forbidden */
+        if ( (ip->op[0]->reg & (REG_IX |REG_IY)) &&
+             (ip->op[1]->reg & (REG_IX|REG_IY)) &&
+             (((ip->op[0]->reg & REG_IX) && (ip->op[1]->reg & REG_IY)) ||
+              ((ip->op[1]->reg & REG_IX) && (ip->op[0]->reg & REG_IY)) )){
+            cpu_error(23,opcode->name);
+        }
+        // forbid ld ixl, (ix+0)
+        if ( (ip->op[0]->reg & (REG_IX |REG_IY)) &&
+             (ip->op[1]->reg & (REG_IX|REG_IY)) &&
+             (ip->op[1]->type & OP_OFFSET)
+           ){
+            cpu_error(23,opcode->name);
+        }
         offs =  ((ip->op[0]->reg & REG_PLAIN) * 8) + ( ip->op[1]->reg & REG_PLAIN);
         break;
     case TYPE_ARITH16:

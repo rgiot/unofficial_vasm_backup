@@ -821,7 +821,7 @@ int parse_operand(char *p, int len, operand *op, int optype)
     op->bit = 0;
 
     p = skip(p);
-    if ( *p == '(' && optype != OP_ABS ) {
+    if ( *p == '(' && optype != OP_ABS && check_indir(p,start+len) ) {
         int   llen;
         char *end;
         p++;

@@ -821,6 +821,7 @@ int parse_operand(char *p, int len, operand *op, int optype)
     op->bit = 0;
 
     p = skip(p);
+  //  printf("\tLine:%s\n\tindir:%d\n", p, check_indir(p,start+len));
     if ( *p == '(' && optype != OP_ABS && check_indir(p,start+len) ) {
         int   llen;
         char *end;
@@ -876,6 +877,7 @@ int parse_operand(char *p, int len, operand *op, int optype)
 
         } else if ( ( op->value = parse_expr(&p) ) != NULL ) {
             opt = OP_ABS16|OP_INDIR;
+            printf("OP_ABS16|OP_INDIR\n");
         } else {
             return PO_NOMATCH;
         }
@@ -1836,7 +1838,8 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
         }
         break;
     case TYPE_LD8:
-        /* ix/iy coubles forbidden */
+        printf("TYPE_LD8\n");
+        /* ix/iy couples forbidden */
         if ( (ip->op[0]->reg & (REG_IX |REG_IY)) &&
              (ip->op[1]->reg & (REG_IX|REG_IY)) &&
              (((ip->op[0]->reg & REG_IX) && (ip->op[1]->reg & REG_IY)) ||
@@ -1850,16 +1853,27 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
            ){
             cpu_error(23,opcode->name);
         }
-	// forbid ld ixl,(hl) or similar expressions (wrong test does not work:( Why?!)
-	if ( (ip->op[0]->reg & (REG_IX|REG_IY)) &&
-	     (ip->op[1]->reg & REG_PLAIN) == REG_HLREF)
-	{
+        // forbid ld ixl,(hl) or similar expressions 
+        if ( (ip->op[0]->reg & (REG_IX|REG_IY)) &&
+             (ip->op[1]->reg & REG_PLAIN) == REG_HLREF)
+        {
             cpu_error(24,opcode->name);
-	}
+        }
 
         offs =  ((ip->op[0]->reg & REG_PLAIN) * 8) + ( ip->op[1]->reg & REG_PLAIN);
         break;
     case TYPE_ARITH16:
+
+        // Forbid instructions of type ld (hl), (0x00)
+        if ( opcode->operand_type[1] && (opcode->operand_type[1] & (OP_ADDR)) &&
+             opcode->operand_type[0] && (OP_INDIR) &&
+             (ip->op[0]->reg & REG_PLAIN) == REG_HL) {
+            cpu_error(25);
+        }
+
+
+
+
         if ( opcode->operand_type[1] && (opcode->operand_type[1] & ( OP_ARITH16)) ) {
             offs = (ip->op[1]->reg & REG_PLAIN) * 16;
             if ( (ip->op[0]->reg & REG_PLAIN) == REG_HL && (ip->op[1]->reg & REG_PLAIN) == REG_HL &&

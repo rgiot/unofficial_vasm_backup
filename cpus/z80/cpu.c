@@ -821,8 +821,11 @@ int parse_operand(char *p, int len, operand *op, int optype)
     op->bit = 0;
 
     p = skip(p);
-  //  printf("\tLine:%s\n\tindir:%d\n", p, check_indir(p,start+len));
-    if ( *p == '(' && optype != OP_ABS && check_indir(p,start+len) ) {
+    /* Here I disable the possiblity to use parenthesis around constants when 
+     * addressing is not possible. This old behavior created a lot of inhexisting
+     * instructions and bugs 
+     */
+    if ( *p == '(' /*&& optype != OP_ABS*/ && check_indir(p,start+len) ) {
         int   llen;
         char *end;
         p++;

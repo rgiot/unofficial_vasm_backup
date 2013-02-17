@@ -1850,6 +1850,14 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
            ){
             cpu_error(23,opcode->name);
         }
+	// forbid ld ixl,(hl) or similar expressions (wrong test does not work:( Why?!)
+	if ( (ip->op[0]->reg & (REG_IX|REG_IY)) &&
+	     (ip->op[1]->reg & REG_HLREF) &&
+	     (ip->op[1]->type & OP_OFFSET) )
+	{
+            cpu_error(24,opcode->name);
+	}
+
         offs =  ((ip->op[0]->reg & REG_PLAIN) * 8) + ( ip->op[1]->reg & REG_PLAIN);
         break;
     case TYPE_ARITH16:

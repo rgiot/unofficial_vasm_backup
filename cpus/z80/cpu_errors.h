@@ -22,3 +22,4 @@
     "Missed matched index registers on %s",ERROR,
     "Only out (c),0 is supported for the opcode %s",ERROR,
     "Operations between different index registers are forbidden",ERROR,
+    "Operations between ix/iy/hm are forbidden", ERROR,

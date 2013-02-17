@@ -692,7 +692,7 @@ int eval_expr(expr *tree,taddr *result,section *sec,taddr pc)
         cpc->pc=pc;
       }
       val=tree->c.sym->pc;
-      cnst=(sec->flags&UNALLOCATED)!=0;
+      cnst=sec==NULL?0:(sec->flags&UNALLOCATED)!=0;
     }else{
       /* IMPORT */
       cnst=0;

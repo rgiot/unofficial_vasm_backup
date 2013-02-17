@@ -15,12 +15,16 @@ o m68k: Division optimization (-opt-div, directive opt od) must not try
   zero, while ASR rounds downwards.
 o PPC: Register symbols are no longer exported into most object formats.
 o z80: Forbid operations between different index registers, like ix/iy
-  pairs and ld ixl,(ix+0).
+  pairs and ld ixl,(ix+0) (fixed by Romain Giot).
+o z80: Improved detection of indirect operands in parentheses (fixed by
+  Romain Giot).
 o oldstyle-syntax: STRUCT and ENDSTRUCT directives for supporting
   structures.
 o mot-syntax: Devpac-compatible CARGS directive.
 o mot-syntax: New directive OFFSET. Devpac-compatible, but additionally to
   Devpac it allows any directive or instruction within such a section.
+o output-vobj: Output was broken since 1.6, when relocations based on
+  the current-pc symbol had been used.
 
 - 1.6 (29.12.12)
 o New instruction/operand parser. Can handle instruction availability,

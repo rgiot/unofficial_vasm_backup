@@ -1,9 +1,9 @@
 /* output_vasm.c vobj format output driver for vasm */
-/* (c) in 2002-2011 by Volker Barthelmann */
+/* (c) in 2002-2013 by Volker Barthelmann */
 
 #include "vasm.h"
 
-static char *copyright="vasm vobj output module 0.7a (c) 2002-2011 Volker Barthelmann";
+static char *copyright="vasm vobj output module 0.7b (c) 2002-2013 Volker Barthelmann";
 
 /*
   Format (WILL CHANGE!):
@@ -97,8 +97,11 @@ static int sym_valid(symbol *symp)
   if(*symp->name==' ')
     return 0;  /* ignore internal/temporary symbols */
 #endif
-  if (symp->flags & VASMINTERN)
-    return 0;  /* ignore vasm-internal symbols */
+  if (symp->flags & VASMINTERN) {
+    /* do not ignore current-pc symbol, which is needed for some relocs */
+    if (strcmp(symp->name," *current pc dummy*") != 0)
+      return 0;  /* ignore vasm-internal symbols */
+  }
   return 1;
 }
 

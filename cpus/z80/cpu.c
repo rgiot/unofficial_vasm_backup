@@ -821,7 +821,11 @@ int parse_operand(char *p, int len, operand *op, int optype)
     op->bit = 0;
 
     p = skip(p);
-    if ( *p == '(' && optype != OP_ABS && check_indir(p,start+len) ) {
+    /* Here I disable the possiblity to use parentheses around constants 
+     * when addressing is not possible. This old behavior created a lot of
+     * inexisting instructions and bugs.
+     */
+    if ( *p == '(' /*&& optype != OP_ABS*/ && check_indir(p,start+len) ) {
         int   llen;
         char *end;
         p++;
@@ -1836,7 +1840,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
         }
         break;
     case TYPE_LD8:
-        /* ix/iy coubles forbidden */
+        /* ix/iy couples forbidden */
         if ( (ip->op[0]->reg & (REG_IX |REG_IY)) &&
              (ip->op[1]->reg & (REG_IX|REG_IY)) &&
              (((ip->op[0]->reg & REG_IX) && (ip->op[1]->reg & REG_IY)) ||
@@ -1850,9 +1854,26 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
            ){
             cpu_error(23,opcode->name);
         }
+        // forbid ld ixl,(hl) or similar expressions 
+        if ( (ip->op[0]->reg & (REG_IX|REG_IY)) &&
+             (ip->op[1]->reg & REG_PLAIN) == REG_HLREF)
+        {
+            cpu_error(24,opcode->name);
+        }
         offs =  ((ip->op[0]->reg & REG_PLAIN) * 8) + ( ip->op[1]->reg & REG_PLAIN);
         break;
     case TYPE_ARITH16:
+        // Forbid instructions of type ld (hl), (memory)
+        if ( opcode->operand_type[1] && (opcode->operand_type[1] & (OP_ADDR)) &&
+             opcode->operand_type[0] && (OP_INDIR) &&
+             (ip->op[0]->reg & REG_PLAIN) == REG_HL) {
+            cpu_error(25);
+        }
+        // Forbid instructions of type ld (memory), (hl)
+        if (BASIC_TYPE(ip->op[0]->type) == OP_ABS16 && 
+             BASIC_TYPE(ip->op[1]->type) == OP_HL) {
+            cpu_error(25);
+        }
         if ( opcode->operand_type[1] && (opcode->operand_type[1] & ( OP_ARITH16)) ) {
             offs = (ip->op[1]->reg & REG_PLAIN) * 16;
             if ( (ip->op[0]->reg & REG_PLAIN) == REG_HL && (ip->op[1]->reg & REG_PLAIN) == REG_HL &&

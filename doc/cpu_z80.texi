@@ -132,5 +132,6 @@ This module has the following error messages:
 @item 2022: Missed matched index registers on %s
 @item 2023: Only out (c),0 is supported for the opcode %s
 @item 2024: Operations between different index registers are forbidden
+@item 2025: Operations between ix/iy/hl are forbidden
+@item 2026: Double indirection forbidden
 @end itemize
-

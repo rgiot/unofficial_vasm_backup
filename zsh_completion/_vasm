@@ -1,0 +1,409 @@
+#compdef vasmz80_oldstyle
+
+# _vasm - vasm autocompletion for zsh
+# GPL
+# (c) in 2013 by Romain Giot
+# TODO Manage the fact that some options are exclusives
+
+# Set the common parameters
+base=('-o[save output in file]' 
+	'(-v --version)'{-v,--version}'[display vasm version]'
+	'*-D-[define a macro]:define macro:' 
+	'*-I-[add directory in search path]:file search path:_files -/' 
+	'-F-[defines output format]:output format:(bin test elf aout tos vobj hunk )'
+        '-ignore-mult-inc[silently ignore the multiples inclusions of files]'	
+	'-L[list file]:file:_files'
+	'-Ll-[number of lines per listing page]:integer'
+	'-Lnf[do not emit form feed code in listing]'
+	'-Lns[do not include symbols in listing]'
+	'-maxerrors=[max errors]:integer'
+	'-nocase[disable case for everything]'
+	'-noesc[disable escape sequencies]'
+	'-nosym[remove all non mandatory symbols]'
+	'*-nowarn=[disable specific warning]:integer'
+	'-pic[try to generate position independant code]'
+	'-quiet[do not display copyright and statistics]'
+	'-unamed-sections[uname the sections]'
+	'-w[hide warnings]'
+	'-x[show an error message when referencing an undefined symbol]'
+	'*:file: _files')
+
+
+# set the parameters specific to the syntax
+case $words[1] in
+	*_oldstyle)
+		syntax=('-dotdir[directives must be prefixed by "."]'
+		        '-autoexp[automatically export non local symbols]')
+		;;
+	*_standard)
+		syntax=('-ac[Immediately allocate common symbols in .bss/.sbss section and define them as externally visible]'
+		        '-nodotneeded[Recognize assembly directives without a leading dot (.)]'
+			'-sdlimit=[Put data up to a maximum size of n bytes into the small-data sections]')
+		;;
+	*_mot)
+		syntax=('-align[Enables 16-bit alignment for constant declaration (dc.?, except dc.b) directives]'
+		        '-devpac[Devpac-compatibility mode]'
+			'-localu[Local symbols are introduced by "_" instead of ".". For Devpac compatbility, which offers a similar option]'
+			'-phxass[PhxAss-compatibilty mode]'
+			'-spaces[Allow blanks in operands]'
+			'-ldots[Allow dots (.) within all identifiers]')
+		;;
+
+esac
+
+
+# set the parameters specific to the cpu
+case $words[1] in
+	vasmz80_*)
+		cpu=('-swapixiy[Swaps the usage of ix and iy registers]'
+		     '-8080[Turns on 8080 compatibility mode]'
+		     '-hd64180[Turns on 64180 mode supporting additional 64180 opcodes]'
+		     '-gbz80[Turns on gbz80 compatibility mode.]'
+		     '-rcm2000'
+		     '-rcm3000'
+		     '-rcm4000'
+		     '-rcmemu'
+		     '-z80asm[Switches on z80asm mode]')
+		     ;;
+	vasmm68k_*)
+		cpu=('-m68000[Generate code for the MC68000 CPU]'
+		     '-m68008[Generate code for the MC68008 CPU]'
+		     '-m68010[Generate code for the MC68010 CPU]'
+		     '-m68020[Generate code for the MC68020 CPU]'
+		     '-m68030[Generate code for the MC68030 CPU]'
+		     '-m68040[Generate code for the MC68040 CPU]'
+		     '-m68060[Generate code for the MC68060 CPU]'
+		     '-m68020up[Generate code for the MC68020-68060 CPU]'
+		     '-mcpu32[Generate code for the CPU32 family (MC6833x, MC6834x, etc.)]'
+                             '-mcf5202'
+                             '-mcf5204'
+                             '-mcf5206'
+                             '-mcf520x'
+                             '-mcf5206e'
+                             '-mcf5207'
+                             '-mcf5208'
+                             '-mcf5210a'
+                             '-mcf5211a'
+                             '-mcf5212'
+                             '-mcf5213'
+                             '-mcf5214'
+                             '-mcf5216'
+                             '-mcf5224'
+                             '-mcf5225'
+                             '-mcf5232'
+                             '-mcf5233'
+                             '-mcf5234'
+                             '-mcf5235'
+                             '-mcf523x'
+                             '-mcf5249'
+                             '-mcf5250'
+                             '-mcf5253'
+                             '-mcf5270'
+                             '-mcf5271'
+                             '-mcf5272'
+                             '-mcf5274'
+                             '-mcf5275'
+                             '-mcf5280'
+                             '-mcf5281'
+                             '-mcf528x'
+                             '-mcf52221'
+                             '-mcf52553'
+                             '-mcf52230'
+                             '-mcf52231'
+                             '-mcf52232'
+                             '-mcf52233'
+                             '-mcf52234'
+                             '-mcf52235'
+                             '-mcf52252'
+                             '-mcf52254'
+                             '-mcf52255'
+                             '-mcf52256'
+                             '-mcf52258'
+                             '-mcf52259'
+                             '-mcf52274'
+                             '-mcf52277'
+                             '-mcf5307'
+                             '-mcf5327'
+                             '-mcf5328'
+                             '-mcf5329'
+                             '-mcf532x'
+                             '-mcf5372'
+                             '-mcf5373'
+                             '-mcf537x'
+                             '-mcf53011'
+                             '-mcf53012'
+                             '-mcf53013'
+                             '-mcf53014'
+                             '-mcf53015'
+                             '-mcf53016'
+                             '-mcf53017'
+                             '-mcf5301x'
+                             '-mcf5407'
+                             '-mcf5470'
+                             '-mcf5471'
+                             '-mcf5472'
+                             '-mcf5473'
+                             '-mcf5474'
+                             '-mcf5475'
+                             '-mcf547x'
+                             '-mcf5480'
+                             '-mcf5481'
+                             '-mcf5482'
+                             '-mcf5483'
+                             '-mcf5484'
+                             '-mcf5485'
+                             '-mcf548x'
+                             '-mcf54450'
+                             '-mcf54451'
+                             '-mcf54452'
+                             '-mcf54453'
+                             '-mcf5445x'
+                             '-m5202'
+                             '-m5204'
+                             '-m5206'
+                             '-m520x'
+                             '-m5206e'
+                             '-m5207'
+                             '-m5208'
+                             '-m5210a'
+                             '-m5211a'
+                             '-m5212'
+                             '-m5213'
+                             '-m5214'
+                             '-m5216'
+                             '-m5224'
+                             '-m5225'
+                             '-m5232'
+                             '-m5233'
+                             '-m5234'
+                             '-m5235'
+                             '-m523x'
+                             '-m5249'
+                             '-m5250'
+                             '-m5253'
+                             '-m5270'
+                             '-m5271'
+                             '-m5272'
+                             '-m5274'
+                             '-m5275'
+                             '-m5280'
+                             '-m5281'
+                             '-m528x'
+                             '-m52221'
+                             '-m52553'
+                             '-m52230'
+                             '-m52231'
+                             '-m52232'
+                             '-m52233'
+                             '-m52234'
+                             '-m52235'
+                             '-m52252'
+                             '-m52254'
+                             '-m52255'
+                             '-m52256'
+                             '-m52258'
+                             '-m52259'
+                             '-m52274'
+                             '-m52277'
+                             '-m5307'
+                             '-m5327'
+                             '-m5328'
+                             '-m5329'
+                             '-m532x'
+                             '-m5372'
+                             '-m5373'
+                             '-m537x'
+                             '-m53011'
+                             '-m53012'
+                             '-m53013'
+                             '-m53014'
+                             '-m53015'
+                             '-m53016'
+                             '-m53017'
+                             '-m5301x'
+                             '-m5407'
+                             '-m5470'
+                             '-m5471'
+                             '-m5472'
+                             '-m5473'
+                             '-m5474'
+                             '-m5475'
+                             '-m547x'
+                             '-m5480'
+                             '-m5481'
+                             '-m5482'
+                             '-m5483'
+                             '-m5484'
+                             '-m5485'
+                             '-m548x'
+                             '-m54450'
+                             '-m54451'
+                             '-m54452'
+                             '-m54453'
+                             '-m5445x'
+			     '-mcfv2[Generate code for the V2 ColdFire core'
+			     '-mcfv3[Generate code for the V3 ColdFire core'
+			     '-mcfv4[Generate code for the V4 ColdFire core'
+			     '-mcfv4e[Generate code for the V4e ColdFire core'
+			     '-m68851[Generate code for the MC68851 MMU'
+			     '-m68881[Generate code for the MC68881 FPU'
+			     '-m68882[Generate code for the MC68882 FPU'
+			     '-no-opt[Disable all optimizations]'
+			     '-opt-allbra[When specified the assembler will also try to optimize branch instructions which already have a valid size extension]'
+			     '-opt-brajmp[Translate relative branch instructions, whose destination is in a different section, into absolute jump instructions]'
+			     '-opt-clr[Enables optimization from MOVE #0,<ea> into CLR <ea>. Note that CLR will execute a read-modify-write cycle on the MC68000]'
+			     '-opt-fconst[Floating point constants are loaded with the lowest precision possible]'
+			     '-opt-lsl[Allows optimization of LSL into ADD. This optimization may modify the V-flag, which might not be intended]'
+			     '-opt-movem[Enables optimization from MOVEM <ea>,Rn into MOVE <ea>,Rn (or the other way around)]'
+			     '-opt-mul[Immediate multplication factors, which are a power of two (from 2 to 256), are optimized to shifts]'
+			     '-opt-div[Immediate divisors, which are a power of two (from 2 to 256), are optimized to shifts]'
+			     '-opt-pea[Enables optimization from MOVE #x,-(SP) into PEA x]'
+			     '-opt-speed[Optimize for speed, even if this would increase code size]'
+			     '-opt-st[Enables optimization from MOVE.B #-1,<ea> into ST <ea>]'
+			     '-showcrit[Print all critical optimizations which have side effects]'
+			     '-showopt[Print all optimizations and translations vasm is doing (same as opt ow+)]' 
+		)
+		;;
+	
+	vasm6502_*)
+		cpu = (    "-opt-branch[Enables 'optimization' of B<cc> branches into 'B<!cc> *+3 ; JMP label' sequences when necessary]"
+			   "-illegal[Allow 'illegal' 6502 instructions to be recognized]"
+			   "-dtv[Recognize the three additional C64-DTV instructions]"
+
+		)
+		;;
+	
+	vasmarm_*)
+		cpu = (
+		'-m2[Generate code for the ARM2 CPU]'
+		'-m250[Generate code for the ARM250 CPU]'
+		'-m3[Generate code for the ARM3 CPU]'
+		'-m6[Generate code for the ARM6 CPU]'
+		'-m600[Generate code for the ARM600 CPU]'
+		'-m610[Generate code for the ARM610 CPU]'
+		'-m7[Generate code for the ARM7 CPU]'
+		'-m710[Generate code for the ARM710 CPU]'
+		'-m7500[Generate code for the ARM7500 CPU]'
+		'-m7d[Generate code for the ARM7d CPU]'
+		'-m7di[Generate code for the ARM7di CPU]'
+		'-m7dm[Generate code for the ARM7dm CPU]'
+		'-m7dmi[Generate code for the ARM7dmi CPU]'
+		'-m7tdmi[Generate code for the ARM7tdmi CPU]'
+		'-m8[Generate code for the ARM8 CPU]'
+		'-m810[Generate code for the ARM810 CPU]'
+		'-m9[Generate code for the ARM9 CPU]'
+		'-m9[Generate code for the ARM9 CPU]'
+		'-m920[Generate code for the ARM920 CPU]'
+		'-m920t[Generate code for the ARM920t CPU]'
+		'-m9tdmi[Generate code for the ARM9tdmi CPU]'
+		'-msa1[Generate code for the SA1 CPU]'
+		'-mstrongarm[Generate code for the STRONGARM CPU']
+		'-mstrongarm110[Generate code for the STRONGARM110 CPU]'
+		'-mstrongarm1100[Generate code for the STRONGARM1100 CPU]'
+		'-a2[Generate code compatible with ARM V2 architecture]'
+		'-a3[Generate code compatible with ARM V3 architecture]'
+		'-a3m[Generate code compatible with ARM V3m architecture]'
+		'-a4[Generate code compatible with ARM V4 architecture]'
+		'-a4t[Generate code compatible with ARM V4t architecture]'
+		'-little[Output little-endian code and data (default)]'
+		'-big[Output big-endian code and data]'
+		'-thumb[Start assembling in Thumb mode]'
+		'-opt-ldrpc'
+		'-opt-adr'
+	)
+		;;
+	vasmc16x_*)
+		cpu = (
+			"-opt-branch[Enables 'optimization' of B<cc> branches into 'B<!cc> *+3 ; JMP label' sequences when necessary]"
+    			"-illegal[Allow 'illegal' 6502 instructions to be recognized]"
+	    		'-dtv[Recognize the three additional C64-DTV instructions]'
+		)
+		;;
+
+	vasmppc_*)
+		cpu = (
+    			'-big[Select big-endian mode]'
+    			"-no-regnames[Don't predefine any register-name symbols]"
+    			'-little[Select little-endian mode]'
+    			'-mpwrx'
+		       	'-mpwr2[Generate code for the POWER2 family]'
+    			'-mpwr[Generate code for the POWER family]'
+    			'-m601[Generate code for the 601]'
+    			'-mppc32[Generate code for the 32-bit PowerPC family]'
+		       	'-mppc[Generate code for the 32-bit PowerPC family]'
+		       	'-m403[Generate code for the 32-bit PowerPC family]'
+		       	'-m405[Generate code for the 32-bit PowerPC family]'
+		       	'-m603[Generate code for the 32-bit PowerPC family]'
+		       	'-m604[Generate code for the 32-bit PowerPC family]'
+		       	'-m750[Generate code for the 32-bit PowerPC family]'
+		       	'-m860[Generate code for the 32-bit PowerPC family]'
+    			'-mppc64[Generate code for the 64-bit PowerPC family]'
+		       	'-m620[Generate code for the 64-bit PowerPC family]'
+    			'-mavec[Generate code for the Altivec unit]'
+		       	'-maltivec[Generate code for the Altivec unit]'
+    			'-mcom[Allow only common PPC instructions]'
+    			'-many[Allow any PPC instruction]'
+    			'-sdreg=[Set small data base register to Rn]:n:integer'
+    			'-sd2reg=[Set the 2nd small data base register to Rn]:n:integer'
+    			"-opt-branch[Enables 'optimization' of 16-bit branches into 'B<!cc> $+8 ; B label' sequences when necessary"
+		)
+		;;
+
+	vasmtest_*)
+		;;
+
+	vasmx86_*)
+		cpu = (
+    			'-m8086[Generate code for the 8086 CPU]'
+    			'-mi186[Generate code for the 80186 CPU]'
+    			'-mi286[Generate code for the 80286 CPU]'
+    			'-mi386[Generate code for the 80386 CPU]'
+    			'-mi486[Generate code for the 80486 CPU]'
+    			'-mi586[Generate code for the Pentium]'
+    			'-mi686[Generate code for the PentiumPro]'
+    			'-mpentium[Generate code for the Pentium]'
+    			'-mpentiumpro[Generate code for the PentiumPro]'
+    			'-mk6[Generate code for the AMD K6]'
+    			'-mathlon[Generate code for the AMD Athlon]'
+    			'-msledgehammer[Generate code for the Sledgehammer CPU]'
+    			'-m64[Generate code for 64-bit architectures (x86_64)]'
+    			'-cpudebug=[Enables debugging output]:n:integer'.
+
+		;;
+esac
+
+
+
+for arg in $words; do
+	if test "x${arg}" = "x-Faoutx"; then
+			output = (
+			'-mid=[Sets the MID field of the a.out header to the specified value]:integer'
+			)
+	fi
+
+	if test "x${arg}" = "x-Fbinx"; then
+			output = (
+			'-cbm-prg[Writes a Commodore PRG header in front of the output file, which consists of two bytes in little-endian order, defining the load address of the program]'
+			)
+	fi
+
+
+	if test "x${arg}" = "x-Fhunkx"; then
+			output = (
+			'-databss[Try to shorten sections in the output file by removing zero words without relocation from the end]'
+			)
+	fi
+
+	if test "x${arg}" = "x-Ftosx"; then
+			output = (
+			'-tos-flags=[Sets the flags field in the TOS file header. Defaults to 0. Overwrites a TOS flags definition in the assembler source.]:flag'
+			)
+	fi
+
+
+
+done
+
+# Produce the final list
+_arguments $base $syntax $cpu $output
+

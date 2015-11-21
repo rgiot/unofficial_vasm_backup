@@ -1,20 +1,22 @@
 /* output_elf.c ELF output driver for vasm */
-/* (c) in 2002-2012 by Frank Wille */
+/* (c) in 2002-2015 by Frank Wille */
 
 #include "vasm.h"
 #include "output_elf.h"
-#if ELFCPU
-static char *copyright="vasm ELF output module 2.1 (c)2002-2012 Frank Wille";
-static int be,cpu;
+#include "stabs.h"
+#if ELFCPU && defined(OUTELF)
+static char *copyright="vasm ELF output module 2.3 (c) 2002-2015 Frank Wille";
+static int be,cpu,bits;
 static unsigned elfrelsize,shtreloc;
 
 static struct list shdrlist,symlist,relalist;
-static struct StrTabList shstrlist,strlist;
+static struct StrTabList shstrlist,strlist,stabstrlist;
 
 static unsigned symtabidx,strtabidx,shstrtabidx;
 static unsigned symindex,shdrindex;
-static unsigned stabidx,stabstridx;
-static taddr stabsize,stabstrsize;
+static unsigned stabidx,stabstralign;
+static utaddr stablen;
+static char stabname[] = ".stab";
 
 
 static unsigned addString(struct StrTabList *sl,char *s)
@@ -37,12 +39,16 @@ static void init_lists(void)
   shstrlist.index = strlist.index = 0;
   initlist(&shstrlist.l);
   initlist(&strlist.l);
-  symindex = shdrindex = stabidx = stabstridx = 0;
-  addString(&shstrlist,"");  /* first string is always "" */
+  symindex = shdrindex = stabidx = 0;
+  addString(&shstrlist,emptystr);  /* first string is always "" */
   symtabidx = addString(&shstrlist,".symtab");
   strtabidx = addString(&shstrlist,".strtab");
   shstrtabidx = addString(&shstrlist,".shstrtab");
-  addString(&strlist,"");
+  addString(&strlist,emptystr);
+  if (!no_symbols && first_nlist) {
+    initlist(&stabstrlist.l);
+    addString(&stabstrlist,emptystr);
+  }
 }
 
 
@@ -51,6 +57,7 @@ static struct Shdr32Node *addShdr32(void)
   struct Shdr32Node *s = mycalloc(sizeof(struct Shdr32Node));
 
   addtail(&shdrlist,&(s->n));
+  shdrindex++;
   return s;
 }
 
@@ -60,6 +67,7 @@ static struct Shdr64Node *addShdr64(void)
   struct Shdr64Node *s = mycalloc(sizeof(struct Shdr64Node));
 
   addtail(&shdrlist,&(s->n));
+  shdrindex++;
   return s;
 }
 
@@ -92,8 +100,8 @@ static struct Symbol64Node *addSymbol64(char *name)
 }
 
 
-static void newSym32(char *name,elfull value,elfull size,unsigned char bind,
-                     unsigned char type,unsigned shndx)
+static void newSym32(char *name,elfull value,elfull size,uint8_t bind,
+                     uint8_t type,unsigned shndx)
 {
   struct Symbol32Node *elfsym = addSymbol32(name);
 
@@ -104,8 +112,8 @@ static void newSym32(char *name,elfull value,elfull size,unsigned char bind,
 }
 
 
-static void newSym64(char *name,elfull value,elfull size,unsigned char bind,
-                     unsigned char type,unsigned shndx)
+static void newSym64(char *name,elfull value,elfull size,uint8_t bind,
+                     uint8_t type,unsigned shndx)
 {
   struct Symbol64Node *elfsym = addSymbol64(name);
 
@@ -212,7 +220,7 @@ static unsigned findelfsymbol(char *name)
 }
 
 
-static void init_ident(unsigned char *id,unsigned char class)
+static void init_ident(unsigned char *id,uint8_t class)
 {
   static char elfid[4] = { 0x7f,'E','L','F' };
 
@@ -224,15 +232,13 @@ static void init_ident(unsigned char *id,unsigned char class)
 }
 
 
-static unsigned long get_sec_type(section *s)
+static uint32_t get_sec_type(section *s)
 /* scan section attributes for type */
 {
   char *a = s->attr;
 
   if (!strncmp(s->name,".note",5))
     return SHT_NOTE;
-  else if (!strcmp(s->name,".stabstr"))
-    return SHT_STRTAB;
 
   while (*a) {
     switch (*a++) {
@@ -252,10 +258,10 @@ static unsigned long get_sec_type(section *s)
 }
 
 
-static taddr get_sec_flags(char *a)
+static utaddr get_sec_flags(char *a)
 /* scan section attributes for flags (read, write, alloc, execute) */
 {
-  taddr f = 0;
+  utaddr f = 0;
 
   while (*a) {
     switch (*a++) {
@@ -274,7 +280,7 @@ static taddr get_sec_flags(char *a)
 }
 
 
-static unsigned char get_sym_info(symbol *s)
+static uint8_t get_sym_info(symbol *s)
 /* determine symbol-info: function, object, section, etc. */
 {
   switch (TYPE(s)) {
@@ -303,13 +309,13 @@ static unsigned get_sym_index(symbol *s)
 }
 
 
-static taddr get_reloc_type(rlist **rl,
-                            taddr *roffset,taddr *addend,symbol **refsym)
+static utaddr get_reloc_type(rlist **rl,
+                             utaddr *roffset,taddr *addend,symbol **refsym)
 {
   rlist *rl2;
-  taddr mask,offset;
+  utaddr mask,offset;
   int size;
-  taddr t = 0;
+  utaddr t = 0;
 
   *roffset = 0;
   *addend = 0;
@@ -336,6 +342,10 @@ static taddr get_reloc_type(rlist **rl,
   }
 #endif
 
+#ifdef VASM_CPU_JAGRISC
+#include "elf_reloc_jag.h"
+#endif
+
   if (t)
     *roffset = offset>>3;
   else
@@ -345,27 +355,28 @@ static taddr get_reloc_type(rlist **rl,
 }
 
 
-static taddr make_relocs(rlist *rl,taddr pc,
-                         void (*newsym)(char *,elfull,elfull,unsigned char,
-                                        unsigned char,unsigned),
-                         void (*addrel)(elfull,elfull,elfull,elfull))
+static utaddr make_relocs(rlist *rl,utaddr pc,
+                          void (*newsym)(char *,elfull,elfull,uint8_t,
+                                         uint8_t,unsigned),
+                          void (*addrel)(elfull,elfull,elfull,elfull))
 /* convert all of an atom's relocations into ELF32/ELF64 relocs */
 {
-  taddr ro = 0;
+  utaddr ro = 0;
 
   if (rl) {
     do {
-      taddr rtype,offset,addend;
+      utaddr rtype,offset;
+      taddr addend;
       symbol *refsym;
 
       if (rtype = get_reloc_type(&rl,&offset,&addend,&refsym)) {
 
-        if (refsym->type == LABSYM) {
+        if (LOCREF(refsym)) {
           /* this is a local relocation */
           addrel(pc+offset,addend,refsym->sec->idx,rtype);
           ro += elfrelsize;
         }
-        else if (refsym->type == IMPORT) {
+        else if (EXTREF(refsym)) {
           /* this is an external symbol reference */
           unsigned idx = findelfsymbol(refsym->name);
 
@@ -388,44 +399,119 @@ static taddr make_relocs(rlist *rl,taddr pc,
 }
 
 
-static taddr prog_sec_hdrs(section *sec,taddr soffset,
+static utaddr make_stabreloc(utaddr pc,struct stabdef *nlist,
+                             void (*addrel)(elfull,elfull,elfull,elfull))
+{
+  rlist dummyrl;
+  rlist *rl = &dummyrl;
+  nreloc nrel;
+  utaddr rtype,offset;
+  taddr addend;
+  symbol *refsym;
+
+  nrel.offset = 0;
+  nrel.size = bits;
+  nrel.mask = ~0;
+  nrel.addend = nlist->value;
+  nrel.sym = nlist->base;
+
+  rl->next = NULL;
+  rl->reloc = &nrel;
+  rl->type = REL_ABS;
+ 
+  if (rtype = get_reloc_type(&rl,&offset,&addend,&refsym)) {
+    if (LOCREF(refsym)) {
+      addrel(pc+offset,addend,refsym->sec->idx,rtype);
+      return elfrelsize;
+    }
+    else
+      ierror(0);
+  }
+  return 0;
+}
+
+
+/* create .rel(a)XXX section header */
+static void make_relsechdr(char *sname,utaddr roffs,utaddr len,unsigned idx,
                            void *(*makeshdr)(elfull,elfull,elfull,elfull,
-                                             elfull,elfull,elfull,elfull),
-                           void (*newsym)(char *,elfull,elfull,
-                                          unsigned char,unsigned char,
-                                          unsigned))
+                                             elfull,elfull,elfull,elfull))
+{
+  char *rname = mymalloc(strlen(sname) + 6);
+ 
+  if (RELA)
+    sprintf(rname,".rela%s",sname);
+  else
+    sprintf(rname,".rel%s",sname);
+
+  makeshdr(addString(&shstrlist,rname),shtreloc,0,
+           roffs, /* relative offset - will be fixed later! */
+           len,idx,bytespertaddr,elfrelsize);
+}
+
+
+static utaddr prog_sec_hdrs(section *sec,utaddr soffset,
+                            void *(*makeshdr)(elfull,elfull,elfull,elfull,
+                                              elfull,elfull,elfull,elfull),
+                            void (*newsym)(char *,elfull,elfull,
+                                           uint8_t,uint8_t,
+                                           unsigned))
 {
   section *secp;
-  void *shn;
+  struct stabdef *nlist = first_nlist;
 
   /* generate section headers for program sections */
   for (secp=sec; secp; secp=secp->next) {
-    if (get_sec_size(secp)>0 || (secp->flags & HAS_SYMBOLS)) {
-      unsigned long type = get_sec_type(secp);
-
-      secp->idx = ++shdrindex;
-
-      if (!strcmp(secp->name,".stabstr")) {
-        stabstridx = shdrindex;
-        stabstrsize = get_sec_size(secp);
-      }
-      else if (!strcmp(secp->name,".stab")) {
-        stabidx = shdrindex;
-        stabsize = (get_sec_size(secp) / 12) - 1;  /* 12: sizeof(nlist32) */
-      }
-
-      shn = makeshdr(addString(&shstrlist,secp->name),
-                     type,get_sec_flags(secp->attr),soffset,
-                     get_sec_size(secp),0,secp->align,0);
-
-      if (type != SHT_NOBITS)
-        soffset += get_sec_size(secp);
+    if (get_sec_size(secp)!=0 || (secp->flags & HAS_SYMBOLS)) {
+      uint32_t type = get_sec_type(secp);
 
       /* add section base symbol */
       newsym(NULL,0,0,STB_LOCAL,STT_SECTION,shdrindex);
+
+      secp->idx = shdrindex;
+      makeshdr(addString(&shstrlist,secp->name),
+               type,get_sec_flags(secp->attr),soffset,
+               get_sec_size(secp),0,secp->align,0);
+
+      if (type != SHT_NOBITS)
+        soffset += get_sec_size(secp);
     }
     else
       secp->idx = 0;
+  }
+
+  /* look for stabs (32 bits only) */
+  if (!no_symbols && bits==32 && nlist!=NULL) {
+    struct Shdr32Node *shn;
+    char *cuname = NULL;
+
+    /* count them, set name of compilation unit */
+    while (nlist != NULL) {
+      stablen++;
+      if (nlist->type==N_SO && nlist->name.ptr!=NULL && *nlist->name.ptr!='\0')
+        cuname = nlist->name.ptr;
+      nlist = nlist->next;
+    }
+    /* add all symbol strings to .stabstr, cu name should be first(?) */
+    addString(&stabstrlist,cuname!=NULL?cuname:filename);
+    nlist = first_nlist;
+    while (nlist != NULL) {
+      nlist->name.idx = nlist->name.ptr != NULL ?
+                        addString(&stabstrlist,nlist->name.ptr) : 0;
+      nlist = nlist->next;
+    }
+    /* make .stab section, preceded by a compilation unit header (stablen+1) */
+    stabidx = shdrindex;
+    shn = makeshdr(addString(&shstrlist,stabname),SHT_PROGBITS,0,soffset,
+                   (stablen+1)*sizeof(struct nlist32),0,4,
+                   sizeof(struct nlist32));
+    soffset += (stablen+1) * sizeof(struct nlist32);
+    setval(be,shn->s.sh_link,4,shdrindex);  /* associated .stabstr section */
+    /* make .stabstr section */
+    makeshdr(addString(&shstrlist,".stabstr"),SHT_STRTAB,0,soffset,
+             stabstrlist.index,0,1,0);
+    soffset += stabstrlist.index;
+    stabstralign = balign(soffset,4);
+    soffset += stabstralign;
   }
 
   return soffset;
@@ -434,7 +520,7 @@ static taddr prog_sec_hdrs(section *sec,taddr soffset,
 
 static unsigned build_symbol_table(symbol *first,
                                    void (*newsym)(char *,elfull,elfull,
-                                                  unsigned char,unsigned char,
+                                                  uint8_t,uint8_t,
                                                   unsigned))
 {
   symbol *symp;
@@ -467,25 +553,25 @@ static unsigned build_symbol_table(symbol *first,
 
 static void make_reloc_sections(section *sec,
                                 void (*newsym)(char *,elfull,elfull,
-                                               unsigned char,unsigned char,
+                                               uint8_t,uint8_t,
                                                unsigned),
                                 void (*addrel)(elfull,elfull,elfull,elfull),
                                 void *(*makeshdr)(elfull,elfull,elfull,elfull,
                                                   elfull,elfull,elfull,elfull))
 {
-  taddr roffset = 0;
+  struct stabdef *nlist = first_nlist;
+  utaddr roffset = 0;
+  utaddr basero,pc;
   section *secp;
 
   /* ".rela.xxx" or ".rel.xxx" relocation sections */
   for (secp=sec; secp; secp=secp->next) {
     if (secp->idx) {
       atom *a;
-      taddr pc=0,npc,basero=roffset;
+      utaddr npc;
 
-      for (a=secp->first; a; a=a->next) {
-        int align = a->align;
-
-        npc = ((pc + align-1) / align) * align;
+      for (a=secp->first,basero=roffset,pc=0; a; a=a->next) {
+        npc = pcalign(a,pc);
         if (a->type == DATA)
           roffset += make_relocs(a->content.db->relocs,npc,newsym,addrel);
         if (a->type == SPACE)
@@ -493,64 +579,24 @@ static void make_reloc_sections(section *sec,
         pc = npc + atom_size(a,secp,npc);
       }
 
-      if (basero != roffset) {  /* were there any relocations? */
-        /* create .relaXX section header */
-        char *sname = mymalloc(strlen(secp->name) + 6);
-
-        if (RELA)
-          sprintf(sname,".rela%s",secp->name);
-        else
-          sprintf(sname,".rel%s",secp->name);
-
-        makeshdr(addString(&shstrlist,sname),shtreloc,0,
-                 basero, /* relative offset - will be fixed later! */
-                 roffset-basero,secp->idx,bytespertaddr,elfrelsize);
-        ++shdrindex;
-      }
+      if (basero != roffset)  /* were there any relocations? */
+        make_relsechdr(secp->name,basero,roffset-basero,secp->idx,makeshdr);
     }
   }
-}
 
-
-static void write_section_data(FILE *f,section *sec)
-{
-  section *secp;
-
-  for (secp=sec; secp; secp=secp->next) {
-    if (secp->idx && get_sec_type(secp)!=SHT_NOBITS) {
-      atom *a;
-      taddr pc=0,npc;
-      unsigned n;
-      int align;
-
-      if (secp->idx == stabidx) {
-        /* patch compilation unit header */
-        a = secp->first;
-        if (a->content.db->size == 12) {
-          unsigned char *p = a->content.db->data;
-
-          setval(be,p,4,1);  /* refers to first string from .stabstr */
-          setval(be,p+4,4,stabsize);
-          setval(be,p+8,4,stabstrsize);
-        }
-      }
-
-      for (a=secp->first; a; a=a->next) {
-        align = a->align;
-        npc = ((pc + align-1) / align) * align;
-        for (n=npc-pc; n>0; n--)
-          fw8(f,0);
-
-        if (a->type == DATA) {
-          fwdata(f,a->content.db->data,a->content.db->size);
-        }
-        else if (a->type == SPACE) {
-          fwsblock(f,a->content.sb);
-        }
-
-        pc = npc + atom_size(a,secp,npc);
-      }
+  if (!no_symbols) {
+    /* look for relocations in .stab */
+    basero = roffset;
+    pc = 0;
+    while (nlist != NULL) {
+      if (nlist->base != NULL)
+        roffset += make_stabreloc(pc,nlist,addrel);
+      nlist = nlist->next;
+      pc += sizeof(struct nlist32);
     }
+    /* create .rel(a).stab when needed */
+    if (basero != roffset)
+      make_relsechdr(stabname,basero,roffset-basero,stabidx,makeshdr);
   }
 }
 
@@ -564,11 +610,60 @@ static void write_strtab(FILE *f,struct StrTabList *strl)
 }
 
 
+static void write_section_data(FILE *f,section *sec)
+{
+  struct stabdef *nlist = first_nlist;
+  section *secp;
+
+  for (secp=sec; secp; secp=secp->next) {
+    if (secp->idx && get_sec_type(secp)!=SHT_NOBITS) {
+      atom *a;
+      utaddr pc=0,npc;
+
+      for (a=secp->first; a; a=a->next) {
+        npc = fwpcalign(f,a,secp,pc);
+
+        if (a->type == DATA) {
+          fwdata(f,a->content.db->data,a->content.db->size);
+        }
+        else if (a->type == SPACE) {
+          fwsblock(f,a->content.sb);
+        }
+
+        pc = npc + atom_size(a,secp,npc);
+      }
+    }
+  }
+
+  if (!no_symbols && nlist!=NULL) {
+    /* write compilation unit header - precedes nlist entries */
+    fw32(f,1,be);  /* source name is first entry in .stabstr */
+    fw32(f,stablen*sizeof(struct nlist32),be);
+    fw32(f,stabstrlist.index,be);
+    /* write .stab */
+    while (nlist != NULL) {
+      struct nlist32 n;
+
+      setval(be,&n.n_strx,4,nlist->name.idx);
+      n.n_type = nlist->type;
+      n.n_other = nlist->other;
+      setval(be,&n.n_desc,2,nlist->desc);
+      setval(be,&n.n_value,4,nlist->value);
+      fwdata(f,&n,sizeof(struct nlist32));
+      nlist = nlist->next;
+    }
+    /* write .stabstr and align */
+    write_strtab(f,&stabstrlist);
+    fwspace(f,stabstralign);
+  }
+}
+
+
 static void write_ELF64(FILE *f,section *sec,symbol *sym)
 {
   struct Elf64_Ehdr header;
   unsigned firstglobal,align1,align2,i;
-  taddr soffset=sizeof(struct Elf64_Ehdr);
+  utaddr soffset=sizeof(struct Elf64_Ehdr);
   struct Shdr64Node *shn;
   struct Symbol64Node *elfsym;
 
@@ -593,31 +688,29 @@ static void write_ELF64(FILE *f,section *sec,symbol *sym)
   make_reloc_sections(sec,newSym64,addRel64,makeShdr64);
 
   /* ".shstrtab" section header string table */
-  ++shdrindex;
   makeShdr64(shstrtabidx,SHT_STRTAB,0,
              soffset,shstrlist.index,0,1,0);
   soffset += shstrlist.index;
-  align1 = ((soffset + 3) & ~3) - soffset;
+  align1 = balign(soffset,4);
   soffset += align1;
 
   /* set last values in ELF header */
   setval(be,header.e_shoff,8,soffset);  /* remember offset of Shdr table */
-  soffset += (shdrindex+3)*sizeof(struct Elf64_Shdr);
-  setval(be,header.e_shstrndx,2,shdrindex);
-  setval(be,header.e_shnum,2,shdrindex+3);
+  soffset += (shdrindex+2)*sizeof(struct Elf64_Shdr);
+  setval(be,header.e_shstrndx,2,shdrindex-1);
+  setval(be,header.e_shnum,2,shdrindex+2);
 
   /* ".symtab" symbol table */
-  ++shdrindex;
   shn = makeShdr64(symtabidx,SHT_SYMTAB,0,soffset,
                    symindex*sizeof(struct Elf64_Sym),
                    firstglobal,8,sizeof(struct Elf64_Sym));
-  setval(be,shn->s.sh_link,4,shdrindex+1);  /* associated .strtab section */
+  setval(be,shn->s.sh_link,4,shdrindex);  /* associated .strtab section */
   soffset += symindex * sizeof(struct Elf64_Sym);
 
   /* ".strtab" string table */
   makeShdr64(strtabidx,SHT_STRTAB,0,soffset,strlist.index,0,1,0);
   soffset += strlist.index;
-  align2 = ((soffset + 3) & ~3) - soffset;
+  align2 = balign(soffset,4);
   soffset += align2;  /* offset for first Reloc-entry */
 
   /* write ELF header */
@@ -630,18 +723,13 @@ static void write_ELF64(FILE *f,section *sec,symbol *sym)
   write_strtab(f,&shstrlist);
 
   /* write section headers */
-  for (i=0; i<align1; i++)
-    fw8(f,0);
+  fwspace(f,align1);
   i = 0;
   while (shn = (struct Shdr64Node *)remhead(&shdrlist)) {
-    if (i == stabidx) {
-      /* set link to stabstr table for .stab section */
-      setval(be,shn->s.sh_link,4,stabstridx);
-    }
     if (readval(be,shn->s.sh_type,4) == shtreloc) {
       /* set correct offset and link to symtab */
       setval(be,shn->s.sh_offset,8,readval(be,shn->s.sh_offset,8)+soffset);
-      setval(be,shn->s.sh_link,4,shdrindex); /* index of associated symtab */
+      setval(be,shn->s.sh_link,4,shdrindex-2); /* index of associated symtab */
     }
     fwdata(f,&(shn->s),sizeof(struct Elf64_Shdr));
     i++;
@@ -655,8 +743,7 @@ static void write_ELF64(FILE *f,section *sec,symbol *sym)
   write_strtab(f,&strlist);
 
   /* write relocations */
-  for (i=0; i<align2; i++)
-    fw8(f,0);
+  fwspace(f,align2);
   if (RELA) {
     struct Rela64Node *rn;
 
@@ -676,7 +763,7 @@ static void write_ELF32(FILE *f,section *sec,symbol *sym)
 {
   struct Elf32_Ehdr header;
   unsigned firstglobal,align1,align2,i;
-  taddr soffset=sizeof(struct Elf32_Ehdr);
+  utaddr soffset=sizeof(struct Elf32_Ehdr);
   struct Shdr32Node *shn;
   struct Symbol32Node *elfsym;
 
@@ -704,31 +791,29 @@ static void write_ELF32(FILE *f,section *sec,symbol *sym)
   make_reloc_sections(sec,newSym32,addRel32,makeShdr32);
 
   /* ".shstrtab" section header string table */
-  ++shdrindex;
   makeShdr32(shstrtabidx,SHT_STRTAB,0,
              soffset,shstrlist.index,0,1,0);
   soffset += shstrlist.index;
-  align1 = ((soffset + 3) & ~3) - soffset;
+  align1 = balign(soffset,4);
   soffset += align1;
 
   /* set last values in ELF header */
   setval(be,header.e_shoff,4,soffset);  /* remember offset of Shdr table */
-  soffset += (shdrindex+3)*sizeof(struct Elf32_Shdr);
-  setval(be,header.e_shstrndx,2,shdrindex);
-  setval(be,header.e_shnum,2,shdrindex+3);
+  soffset += (shdrindex+2)*sizeof(struct Elf32_Shdr);
+  setval(be,header.e_shstrndx,2,shdrindex-1);
+  setval(be,header.e_shnum,2,shdrindex+2);
 
   /* ".symtab" symbol table */
-  ++shdrindex;
   shn = makeShdr32(symtabidx,SHT_SYMTAB,0,soffset,
                    symindex*sizeof(struct Elf32_Sym),
                    firstglobal,4,sizeof(struct Elf32_Sym));
-  setval(be,shn->s.sh_link,4,shdrindex+1);  /* associated .strtab section */
+  setval(be,shn->s.sh_link,4,shdrindex);  /* associated .strtab section */
   soffset += symindex * sizeof(struct Elf32_Sym);
 
   /* ".strtab" string table */
   makeShdr32(strtabidx,SHT_STRTAB,0,soffset,strlist.index,0,1,0);
   soffset += strlist.index;
-  align2 = ((soffset + 3) & ~3) - soffset;
+  align2 = balign(soffset,4);
   soffset += align2;  /* offset for first Reloc-entry */
 
   /* write ELF header */
@@ -741,18 +826,13 @@ static void write_ELF32(FILE *f,section *sec,symbol *sym)
   write_strtab(f,&shstrlist);
 
   /* write section headers */
-  for (i=0; i<align1; i++)
-    fw8(f,0);
+  fwspace(f,align1);
   i = 0;
   while (shn = (struct Shdr32Node *)remhead(&shdrlist)) {
-    if (i == stabidx) {
-      /* set link to stabstr table for .stab section */
-      setval(be,shn->s.sh_link,4,stabstridx);
-    }
     if (readval(be,shn->s.sh_type,4) == shtreloc) {
       /* set correct offset and link to symtab */
       setval(be,shn->s.sh_offset,4,readval(be,shn->s.sh_offset,4)+soffset);
-      setval(be,shn->s.sh_link,4,shdrindex); /* index of associated symtab */
+      setval(be,shn->s.sh_link,4,shdrindex-2); /* index of associated symtab */
     }
     fwdata(f,&(shn->s),sizeof(struct Elf32_Shdr));
     i++;
@@ -766,8 +846,7 @@ static void write_ELF32(FILE *f,section *sec,symbol *sym)
   write_strtab(f,&strlist);
 
   /* write relocations */
-  for (i=0; i<align2; i++)
-    fw8(f,0);
+  fwspace(f,align2);
   if (RELA) {
     struct Rela32Node *rn;
 
@@ -785,8 +864,6 @@ static void write_ELF32(FILE *f,section *sec,symbol *sym)
 
 static void write_output(FILE *f,section *sec,symbol *sym)
 {
-  int bits;
-
   cpu = ELFCPU;    /* cpu ID */
   be = BIGENDIAN;  /* true for big endian */
   bits = bytespertaddr * bitsperbyte;

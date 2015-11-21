@@ -1,5 +1,5 @@
 /* atom.c - atomic objects from source */
-/* (c) in 2010-2012 by Volker Barthelmann and Frank Wille */
+/* (c) in 2010-2015 by Volker Barthelmann and Frank Wille */
 
 #include "vasm.h"
 
@@ -36,6 +36,7 @@ instruction *new_inst(char *inst,int len,int op_cnt,char **op,int *op_len)
         i++;
         continue;  /* try next */
       }
+
 #if MAX_OPERANDS!=0
 
 #if ALLOW_EMPTY_OPS
@@ -47,6 +48,7 @@ instruction *new_inst(char *inst,int len,int op_cnt,char **op,int *op_len)
       mnemo_opcnt = j;	/* number of expected operands for this mnemonic */
 #endif
       inst_found = 2;
+      save_symbols();  /* make sure we can restore symbols to this point */
 
       for (j=k=omitted=skipped=0; j<mnemo_opcnt; j++) {
 
@@ -65,6 +67,7 @@ instruction *new_inst(char *inst,int len,int op_cnt,char **op,int *op_len)
 
           if (rc == PO_CORRUPT) {
             myfree(new);
+            restore_symbols();
             return 0;
           }
           if (rc == PO_NOMATCH)
@@ -85,6 +88,7 @@ instruction *new_inst(char *inst,int len,int op_cnt,char **op,int *op_len)
       if (j<mnemo_opcnt || k<op_cnt) {
         /* No match. Try next mnemonic. */
         i++;
+        restore_symbols();
         continue;
       }
 
@@ -96,6 +100,7 @@ instruction *new_inst(char *inst,int len,int op_cnt,char **op,int *op_len)
       }
       for(; j<MAX_OPERANDS; j++)
         new->op[j] = 0;
+
 #endif /* MAX_OPERANDS!=0 */
 
       new->code = i;
@@ -132,7 +137,7 @@ dblock *new_dblock(void)
 }
 
 
-sblock *new_sblock(expr *space,int size,expr *fill)
+sblock *new_sblock(expr *space,size_t size,expr *fill)
 {
   sblock *sb = mymalloc(sizeof(sblock));
 
@@ -140,15 +145,16 @@ sblock *new_sblock(expr *space,int size,expr *fill)
   sb->space_exp = space;
   sb->size = size;
   if (!(sb->fill_exp = fill))
-    memset(sb->fill,0,SB_MAXSIZE);
+    memset(sb->fill,0,MAXPADBYTES);
   sb->relocs = 0;
+  sb->maxalignbytes = 0;
   return sb;
 }
 
 
-static taddr space_size(sblock *sb,section *sec,taddr pc)
+static size_t space_size(sblock *sb,section *sec,taddr pc)
 {
-  taddr space=0;
+  utaddr space=0;
 
   if (eval_expr(sb->space_exp,&space,sec,pc) || !final_pass)
     sb->space = space;
@@ -159,7 +165,8 @@ static taddr space_size(sblock *sb,section *sec,taddr pc)
     if (sb->size <= sizeof(taddr)) {
       /* space is filled with an expression which may also need relocations */
       symbol *base=NULL;
-      taddr fill,i;
+      taddr fill;
+      utaddr i;
 
       if (!eval_expr(sb->fill_exp,&fill,sec,pc)) {
         if (find_base(sb->fill_exp,&base,sec,pc)==BASE_ILLEGAL)
@@ -170,18 +177,18 @@ static taddr space_size(sblock *sb,section *sec,taddr pc)
         /* generate relocations */
         for (i=0; i<space; i++)
           add_nreloc(&sb->relocs,base,fill,REL_ABS,
-                     sb->size<<3,(i*sb->size)<<3);
+                     sb->size<<3,(sb->size*i)<<3);
       }
     }
     else
       general_error(30);  /* expression must be constant */
   }
 
-  return space * (taddr)sb->size;
+  return sb->size * space;
 }
 
 
-static taddr roffs_size(expr *offsexp,section *sec,taddr pc)
+static size_t roffs_size(expr *offsexp,section *sec,taddr pc)
 {
   taddr offs;
 
@@ -195,8 +202,6 @@ static taddr roffs_size(expr *offsexp,section *sec,taddr pc)
    section is used */
 void add_atom(section *sec,atom *a)
 {
-  taddr size;
-
   if (!sec) {
     sec = default_section();
     if (!sec) {
@@ -205,8 +210,9 @@ void add_atom(section *sec,atom *a)
     }
   }
 
+  a->changes = 0;
   a->src = cur_src;
-  a->line = cur_src->line;
+  a->line = cur_src!=NULL ? cur_src->line : 0;
 
   if (sec->last) {
     atom *pa = sec->last;
@@ -222,12 +228,9 @@ void add_atom(section *sec,atom *a)
   a->next = 0;
   sec->last = a;
 
-  sec->pc = (sec->pc + a->align - 1) / a->align * a->align;
-  size = atom_size(a,sec,sec->pc);
-#if CHECK_ATOMSIZE
-  a->lastsize = size;
-#endif
-  sec->pc += size;
+  sec->pc = pcalign(a,sec->pc);
+  a->lastsize = atom_size(a,sec,sec->pc);
+  sec->pc += a->lastsize;
   if (a->align > sec->align)
     sec->align = a->align;
 
@@ -243,7 +246,7 @@ void add_atom(section *sec,atom *a)
 }
 
 
-taddr atom_size(atom *p,section *sec,taddr pc)
+size_t atom_size(atom *p,section *sec,taddr pc)
 {
   switch(p->type) {
     case LABEL:
@@ -254,11 +257,13 @@ taddr atom_size(atom *p,section *sec,taddr pc)
     case RORG:
     case RORGEND:
     case ASSERT:
+    case NLIST:  /* it has a size, but not in the current section */
       return 0;
     case DATA:
       return p->content.db->size;
     case INSTRUCTION:
-      return instruction_size(p->content.inst,sec,pc);
+      return p->content.inst->code>=0?
+             instruction_size(p->content.inst,sec,pc):0;
     case SPACE:
       return space_size(p->content.sb,sec,pc);
     case DATADEF:
@@ -277,7 +282,7 @@ static void print_instruction(FILE *f,instruction *p)
 {
   int i;
 
-  printf("inst %d(%s) ",p->code,mnemonics[p->code].name);
+  printf("inst %d(%s) ",p->code,p->code>=0?mnemonics[p->code].name:"deleted");
 #if MAX_OPERANDS!=0
   for (i=0; i<MAX_OPERANDS; i++)
     printf("%p ",(void *)p->op[i]);
@@ -330,14 +335,14 @@ void print_atom(FILE *f,atom *p)
       break;
     case PRINTEXPR:
       fprintf(f,"expr: ");
-      print_expr(f,p->content.pexpr);
+      print_expr(f,p->content.pexpr->print_exp);
       break;
     case ROFFS:
       fprintf(f,"roffs: offset ");
       print_expr(f,p->content.roffs);
       break;
     case RORG:
-      fprintf(f,"rorg: relocate to 0x%llx",UNS_TADDR(*p->content.rorg));
+      fprintf(f,"rorg: relocate to 0x%llx",ULLTADDR(*p->content.rorg));
       break;
     case RORGEND:
       fprintf(f,"rorg end");
@@ -346,8 +351,59 @@ void print_atom(FILE *f,atom *p)
       fprintf(f,"assert: %s (message: %s)\n",p->content.assert->expstr,
               p->content.assert->msgstr?p->content.assert->msgstr:emptystr);
       break;
+    case NLIST:
+      fprintf(f,"nlist: %s (type %d, other %d, desc %d) with value ",
+              p->content.nlist->name!=NULL ? p->content.nlist->name : "<NULL>",
+              p->content.nlist->type,p->content.nlist->other,
+              p->content.nlist->desc);
+      print_expr(f,p->content.nlist->value);
+      break;
     default:
       ierror(0);
+  }
+}
+
+
+/* prints and formats an expression from a PRINTEXPR atom */
+void atom_printexpr(printexpr *pexp,section *sec,taddr pc)
+{
+  taddr t;
+  long long v;
+  int i;
+
+  eval_expr(pexp->print_exp,&t,sec,pc);
+  if (pexp->type==PEXP_SDEC && (t&(1LL<<(pexp->size-1)))!=0) {
+    /* signed decimal */
+    v = -1;
+    v &= ~(long long)MAKEMASK(pexp->size);
+  }
+  else
+    v = 0;
+  v |= t & MAKEMASK(pexp->size);
+
+  switch (pexp->type) {
+    case PEXP_HEX:
+      printf("%llX",(unsigned long long)v);
+      break;
+    case PEXP_SDEC:
+      printf("%lld",v);
+      break;
+    case PEXP_UDEC:
+      printf("%llu",(unsigned long long)v);
+      break;
+    case PEXP_BIN:
+      for (i=pexp->size-1; i>=0; i--)
+        putchar((v & (1LL<<i)) ? '1' : '0');
+      break;
+    case PEXP_ASC:
+      for (i=((pexp->size+7)>>3)-1; i>=0; i--) {
+        unsigned char c = (v>>(i*8))&0xff;
+        putchar(isprint(c) ? c : '.');
+      }
+      break;
+    default:
+      ierror(0);
+      break;
   }
 }
 
@@ -384,13 +440,21 @@ atom *clone_atom(atom *a)
 }
 
 
-atom *new_inst_atom(instruction *p)
+static atom *new_atom(int type,taddr align)
 {
   atom *new = mymalloc(sizeof(*new));
 
-  new->next = 0;
-  new->type = INSTRUCTION;
-  new->align = INST_ALIGN;
+  new->next = NULL;
+  new->type = type;
+  new->align = align;
+  return new;
+}
+
+
+atom *new_inst_atom(instruction *p)
+{
+  atom *new = new_atom(INSTRUCTION,INST_ALIGN);
+
   new->content.inst = p;
   return new;
 }
@@ -398,49 +462,38 @@ atom *new_inst_atom(instruction *p)
 
 atom *new_data_atom(dblock *p,taddr align)
 {
-  atom *new = mymalloc(sizeof(*new));
+  atom *new = new_atom(DATA,align);
 
-  new->next = 0;
-  new->type = DATA;
-  new->align = align;
-  new->content.db=p;
+  new->content.db = p;
   return new;
 }
 
 
 atom *new_label_atom(symbol *p)
 {
-  atom *new = mymalloc(sizeof(*new));
+  atom *new = new_atom(LABEL,1);
 
-  new->next = 0;
-  new->type = LABEL;
-  new->align = 1;
   new->content.label = p;
   return new;
 }
 
 
-atom *new_space_atom(expr *space,int size,expr *fill)
+atom *new_space_atom(expr *space,size_t size,expr *fill)
 {
-  atom *new = mymalloc(sizeof(*new));
+  atom *new = new_atom(SPACE,1);
   int i;
 
   if (size<1)
     ierror(0);  /* usually an error in syntax-module */
-  new->next = 0;
-  new->type = SPACE;
-  new->align = 1;
   new->content.sb = new_sblock(space,size,fill);
   return new;
 }  
 
 
-atom *new_datadef_atom(taddr bitsize,operand *op)
+atom *new_datadef_atom(size_t bitsize,operand *op)
 {
-  atom *new = mymalloc(sizeof(*new));
-  new->next = 0;
-  new->type = DATADEF;
-  new->align = DATA_ALIGN(bitsize);
+  atom *new = new_atom(DATADEF,DATA_ALIGN(bitsize));
+
   new->content.defb = mymalloc(sizeof(*new->content.defb));
   new->content.defb->bitsize = bitsize;
   new->content.defb->op = op;
@@ -450,11 +503,8 @@ atom *new_datadef_atom(taddr bitsize,operand *op)
 
 atom *new_srcline_atom(int line)
 {
-  atom *new = mymalloc(sizeof(*new));
+  atom *new = new_atom(LINE,1);
 
-  new->next = 0;
-  new->type = LINE;
-  new->align = 1;
   new->content.srcline = line;
   return new;
 }
@@ -462,11 +512,8 @@ atom *new_srcline_atom(int line)
 
 atom *new_opts_atom(void *o)
 {
-  atom *new = mymalloc(sizeof(*new));
+  atom *new = new_atom(OPTS,1);
 
-  new->next = 0;
-  new->type = OPTS;
-  new->align = 1;
   new->content.opts = o;
   return new;
 }
@@ -474,35 +521,32 @@ atom *new_opts_atom(void *o)
 
 atom *new_text_atom(char *txt)
 {
-  atom *new = mymalloc(sizeof(*new));
+  atom *new = new_atom(PRINTTEXT,1);
 
-  new->next = 0;
-  new->type = PRINTTEXT;
-  new->align = 1;
-  new->content.ptext = txt ? txt : "";
+  new->content.ptext = txt ? txt : "\n";
   return new;
 }
 
 
-atom *new_expr_atom(expr *x)
+atom *new_expr_atom(expr *exp,int type,int size)
 {
-  atom *new = mymalloc(sizeof(*new));
+  atom *new = new_atom(PRINTEXPR,1);
 
-  new->next = 0;
-  new->type = PRINTEXPR;
-  new->align = 1;
-  new->content.pexpr = x;
+  new->content.pexpr = mymalloc(sizeof(*new->content.pexpr));
+  if (exp==NULL || type<PEXP_HEX || type>PEXP_ASC || size<1
+      || size>sizeof(long long)*8)
+    ierror(0);
+  new->content.pexpr->print_exp = exp;
+  new->content.pexpr->type = type;
+  new->content.pexpr->size = size;
   return new;
 }
 
 
 atom *new_roffs_atom(expr *offs)
 {
-  atom *new = mymalloc(sizeof(*new));
+  atom *new = new_atom(ROFFS,1);
 
-  new->next = 0;
-  new->type = ROFFS;
-  new->align = 1;
   new->content.roffs = offs;
   return new;
 }
@@ -510,13 +554,10 @@ atom *new_roffs_atom(expr *offs)
 
 atom *new_rorg_atom(taddr raddr)
 {
-  atom *new = mymalloc(sizeof(*new));
+  atom *new = new_atom(RORG,1);
   taddr *newrorg = mymalloc(sizeof(taddr));
 
   *newrorg = raddr;
-  new->next = 0;
-  new->type = RORG;
-  new->align = 1;
   new->content.rorg = newrorg;
   return new;
 }
@@ -524,25 +565,31 @@ atom *new_rorg_atom(taddr raddr)
 
 atom *new_rorgend_atom(void)
 {
-  atom *new = mymalloc(sizeof(*new));
-
-  new->next = 0;
-  new->type = RORGEND;
-  new->align = 1;
-  return new;
+  return new_atom(RORGEND,1);
 }
 
 
 atom *new_assert_atom(expr *aexp,char *exp,char *msg)
 {
-  atom *new = mymalloc(sizeof(*new));
+  atom *new = new_atom(ASSERT,1);
 
-  new->next = 0;
-  new->type = ASSERT;
-  new->align = 1;
   new->content.assert = mymalloc(sizeof(*new->content.assert));
   new->content.assert->assert_exp = aexp;
   new->content.assert->expstr = exp;
   new->content.assert->msgstr = msg;
+  return new;
+}
+
+
+atom *new_nlist_atom(char *name,int type,int other,int desc,expr *value)
+{
+  atom *new = new_atom(NLIST,1);
+
+  new->content.nlist = mymalloc(sizeof(*new->content.nlist));
+  new->content.nlist->name = name;
+  new->content.nlist->type = type;
+  new->content.nlist->other = other;
+  new->content.nlist->desc = desc;
+  new->content.nlist->value = value;
   return new;
 }

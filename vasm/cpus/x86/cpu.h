@@ -14,6 +14,7 @@
 
 /* data type to represent a target-address */
 typedef int64_t taddr;
+typedef int64_t utaddr;
 
 /* minimum instruction alignment */
 #define INST_ALIGN 1
@@ -33,13 +34,8 @@ int x86_data_operand(int);
 
 
 /* register symbols */
+#define HAVE_REGSYMS
 #define REGSYMHTSIZE 64
-typedef struct regsym {
-  char *reg_name;
-  int reg_type;                 /* see operand_type */
-  unsigned int reg_flags;
-  unsigned int reg_num;         /* usually 0-7 */
-} regsym;
 
 /* reg_flags: */
 #define RegRex	    0x1         /* Extended register.  */

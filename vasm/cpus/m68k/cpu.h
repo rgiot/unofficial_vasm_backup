@@ -1,6 +1,6 @@
 /*
 ** cpu.h Motorola M68k, CPU32 and ColdFire cpu-description header-file
-** (c) in 2002,2006-2011 by Frank Wille
+** (c) in 2002,2006-2015 by Frank Wille
 */
 
 #define BIGENDIAN 1
@@ -18,9 +18,7 @@
 
 /* data type to represent a target-address */
 typedef int32_t taddr;
-
-/* the compexity of the optimizer affords to check the size of each atom */
-#define CHECK_ATOMSIZE 1
+typedef uint32_t utaddr;
 
 /* instruction extension */
 #define HAVE_INSTRUCTION_EXTENSION 1
@@ -29,6 +27,8 @@ typedef struct {
     struct {
       unsigned char flags;
       signed char last_size;
+      signed char orig_ext;
+      char unused;
     } real;
     struct {
       struct instruction *next;
@@ -73,10 +73,11 @@ typedef struct {
 #define OCMD_OPTLQUICK  25
 #define OCMD_OPTIMMADDR 26
 #define OCMD_OPTSPEED   27
-#define OCMD_OPTWARN    28
-#define OCMD_CHKPIC     29
-#define OCMD_CHKTYPE    30
-#define OCMD_NOWARN     31
+#define OCMD_SMALLCODE  28
+#define OCMD_OPTWARN    29
+#define OCMD_CHKPIC     30
+#define OCMD_CHKTYPE    31
+#define OCMD_NOWARN     32
 
 /* minimum instruction alignment */
 #define INST_ALIGN 2
@@ -97,22 +98,15 @@ typedef struct {
   unsigned char bf_width;     /* bitfield width or MAC-MASK '&' */
   int8_t basetype[2];         /* BASE_OK=normal, BASE=PCREL=pc-relative base */
   uint32_t flags;
-  union {
-    expr *value[2];           /* immediate, abs. or displacem. expression */
-    unsigned char *cint;      /* 64-bit or 96-bit constant in big-endian */
-    long double *cfloat;      /* floating point constant */
-  } exp;
+  expr *value[2];             /* immediate, abs. or displacem. expression */
   /* filled during instruction_size(): */
   taddr extval[2];            /* evaluated expression from value[0/1] */
   symbol *base[2];            /* symbol base for value[0/1], NULL otherwise */
 } operand;
 
 /* flags */
-#define FL_Exp              0   /* parsed expression in value[0/1] */
-#define FL_Int64            1   /* 64-bit integer constant in *cint */
-#define FL_Int96            2   /* 96-bit integer constant in *cint */
-#define FL_Float            3   /* floating point constant in *cfloat */
-#define FL_expMask          3
+#define FL_ExtVal0          1   /* extval[0] is set */
+#define FL_ExtVal1          2   /* extval[1] is set */
 #define FL_UsesFormat       4   /* operand uses format word */
 #define FL_020up            8   /* 020+ addressing mode */
 #define FL_noCPU32       0x10   /* addressing mode not available for CPU32 */
@@ -132,6 +126,7 @@ typedef struct {
 #define FL_FPSpec      0x8000   /* special FPU reg. FPIAR/FPCR/FPSR only */
 #define FL_CheckMask   0xf800   /* bits to check when comparing with
                                    flags from struct optype */
+#define FL_BaseReg    0x10000   /* BASEREG expression in exp.value[0] */
 
 /* addressing modes */
 #define MODE_Dn           0
@@ -278,6 +273,7 @@ typedef struct {
 #define SIZE_EXTENDED 0x2000
 #define SIZE_PACKED 0x4000
 #define SIZE_MASK 0x7f00
+#define SIZE_UNAMBIG 0x8000 /* only a single size allowed for this mnemonic */
 #define S_CFCHECK 0x80      /* SIZE_LONG only, when mcf (Coldfire) set */
 #define S_NONE 4
 #define S_STD S_NONE+4      /* 1st word, bits 6-7 */
@@ -374,6 +370,8 @@ struct cpu_models {
 #define mcfusp   0x00010000
 #define mcffpu   0x00020000
 #define mcfmmu   0x00040000
+#define mgas     0x20000000 /* a GNU-as specific mnemonic */
+#define malias   0x40000000 /* a bad alias which we should warn about */
 #define mfpu     0x80000000 /* just to check if CP-ID needs to be inserted */
 
 /* handy aliases */
@@ -390,30 +388,18 @@ struct cpu_models {
 
 
 /* register symbols */
+#define HAVE_REGSYMS
 #define REGSYMHTSIZE 256
-typedef struct regsym {
-  char *name;
-  uint16_t type;
-  uint16_t reg;
-} regsym;
 
 #define RSTYPE_Dn   0
 #define RSTYPE_An   1
 #define RSTYPE_FPn  2
 
 
-/* register list symbols */
-#define REGLSTHTSIZE 256
-typedef struct reglist {
-  char *name;
-  uint16_t list;           /* Bit 0=d0/fp0, 1=d1/fp1, 8=a0, etc... */
-  uint16_t flags;
-} reglist;
-
-#define RLFL_FPLIST     1  /* register list contains FP-registers */
-#define RLFL_FPSPEC     2  /* register list contains FPIAR/FPCR/FPSR */
-
+/* MID for a.out format */
+extern int m68k_mid;
+#define MID m68k_mid
 
 /* exported functions */
-
 int parse_cpu_label(char *,char **);
+#define PARSE_CPU_LABEL(l,s) parse_cpu_label(l,s)

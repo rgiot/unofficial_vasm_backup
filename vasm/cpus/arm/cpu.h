@@ -1,5 +1,5 @@
 /* cpu.h ARM cpu-description header-file */
-/* (c) in 2004 by Frank Wille */
+/* (c) in 2004,2014 by Frank Wille */
 
 #define LITTLEENDIAN (!arm_be_mode)
 #define BIGENDIAN (arm_be_mode)
@@ -17,6 +17,7 @@
 
 /* data type to represent a target-address */
 typedef int32_t taddr;
+typedef uint32_t utaddr;
 
 /* minimum instruction alignment */
 #define INST_ALIGN (thumb_mode ? 2 : 4)
@@ -25,7 +26,7 @@ typedef int32_t taddr;
 #define DATA_ALIGN(n) ((n)<=8 ? 1 : ((n)<=16 ? 2 : 4))
 
 /* operand class for n-bit data definitions */
-#define DATA_OPERAND(n) DATA_OP
+#define DATA_OPERAND(n) (n==64 ? DATA64_OP : DATA_OP)
 
 /* returns true when instruction is valid for selected cpu */
 #define MNEMONIC_VALID(i) cpu_available(i)
@@ -52,6 +53,7 @@ enum {
   /* ARM operands */
   NOOP=0,
   DATA_OP,    /* data operand */
+  DATA64_OP,  /* 64-bit data operand (greater than taddr) */
   BRA24,      /* 24-bit branch offset to label */
   PCL12,      /* 12-bit PC-relative offset with up/down-flag to label */
   PCLCP,      /* 8-bit * 4 PC-relative offset with up/down-flag to label */
@@ -60,6 +62,7 @@ enum {
   CPOP3,      /* 3-bit coprocessor operation code at 23..21 */
   CPTYP,      /* 3-bit coprocessor operation type at 7..5 */
   SWI24,      /* 24-bit immediate at 23..0 (SWI instruction) */
+  IROTV,      /* explicit 4-bit rotate value at 11..8 */
   REG03,      /* Rn at 3..0 */
   REG11,      /* Rn at 11..8 */
   REG15,      /* Rn at 15..12 */
@@ -73,7 +76,8 @@ enum {
   IMUD2,      /* #+/-Imm12 post-indexed */
   IMCP1,      /* #+/-Imm10>>2 pre-indexed with ']' and optional w-back '!' */
   IMCP2,      /* #+/-Imm10>>2 post-indexed */
-  IMROT,      /* #Imm32, 8-bit rotated */
+  IMMD8,      /* #Immediate, 8-bit */
+  IMROT,      /* #Imm32, 8-bit auto-rotated */
   SHIFT,      /* <shift-op> Rs | <shift-op> #Imm5 | RRX = ROR #0 */
   SHIM1,      /* <shift-op> #Imm5 | RRX, pre-indexed with terminating ] or ]! */
   SHIM2,      /* <shift-op> #Imm5 | RRX, post-indexed */
@@ -151,15 +155,13 @@ typedef struct {
 #define NOPCR03   (0x00000020)  /* R15 is not allowed for Rm (3..0) */
 #define NOPCWB    (0x00000040)  /* R15 is not allowed in Write-Back mode */
 #define SETCC     (0x00000100)  /* instruction supports S-bit */
+#define SETPSR    (0x00000200)  /* instruction supports P-bit */
 #define THUMB     (0x10000000)  /* THUMB instruction */
 
 
 /* register symbols */
+#define HAVE_REGSYMS
 #define REGSYMHTSIZE 256
-typedef struct regsym {
-  char *name;
-  int value;  /* usually 0-15 for r0-r15 */
-} regsym;
 
 
 /* cpu types for availability check */

@@ -10,18 +10,14 @@ microprocessor family.
 This module provides the following additional options:
 
 @table @option
-    @item -swapixiy
-        Swaps the usage of ix and iy registers. This is useful
-        for compiling generic code that uses an index register that
-        is reserved on the target machine.
     @item -8080
         Turns on 8080 compatibility mode. Any use of z80 (or higher)
         opcodes will result in an error being generated.
-    @item -hd64180
-        Turns on 64180 mode supporting additional 64180 opcodes.
     @item -gbz80
         Turns on gbz80 compatibility mode. Any use of non-supported
         opcodes will result in an error being generated.
+    @item -hd64180
+        Turns on 64180 mode supporting additional 64180 opcodes.
     @item -rcm2000
     @item -rcm3000
     @item -rcm4000
@@ -32,11 +28,14 @@ This module provides the following additional options:
     @item -rcmemu
          Turns on emulation of some instructions which aren't available
          on the Rabbit processors.
+    @item -swapixiy
+        Swaps the usage of ix and iy registers. This is useful
+        for compiling generic code that uses an index register that
+        is reserved on the target machine.
     @item -z80asm
          Switches on z80asm mode. This translates ASMPC to $ and accepts
          some pseudo opcodes that z80asm supports. Most emulation of 
-         z80asm directives is provided by the oldsyntax syntax module.
-         
+         z80asm directives is provided by the oldsyntax syntax module.         
 @end table
 
 @section General
@@ -95,11 +94,6 @@ will be emulated.
 
 @item Not all RCM4000 opcodes are supported (@code{llcall}, @code{lljp}
  are not available).
-
-@item Parser considers an expression starting by @code{(} as being a memory
-indirection even if there are operations after the closing @code{)}.
-As long as the bug is not corrected you should put operations before the first
-@code{(}.
 
 @end itemize
 

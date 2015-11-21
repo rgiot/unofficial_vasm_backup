@@ -576,7 +576,7 @@ mnemonic mnemonics[] = {
 
 int mnemonic_cnt=sizeof(mnemonics)/sizeof(mnemonics[0]);
 
-char *cpu_copyright="vasm 8080/gbz80/z80/z180/rcmX000 cpu backend 0.2e (c) 2007,2009 Dominic Morris";
+char *cpu_copyright="vasm 8080/gbz80/z80/z180/rcmX000 cpu backend 0.2g (c) 2007,2009 Dominic Morris";
 char *cpuname = "z80";
 int bitsperbyte = 8;
 int bytespertaddr = 2;
@@ -712,7 +712,6 @@ int ext_find_base(symbol **base,expr *p,section *sec,taddr pc)
         modifier = p->type;
         return find_base(p->left,base,sec,pc);
     }
-    modifier = 0;
     return BASE_ILLEGAL;
 }
                                                 
@@ -825,7 +824,7 @@ int parse_operand(char *p, int len, operand *op, int optype)
      * when addressing is not possible. This old behavior created a lot of
      * inexisting instructions and bugs.
      */
-    if ( *p == '(' /*&& optype != OP_ABS*/ && check_indir(p,start+len) ) {
+    if ( *p == '(' && optype != OP_DATA && check_indir(p,start+len) ) {
         int   llen;
         char *end;
         p++;
@@ -1068,6 +1067,7 @@ int parse_operand(char *p, int len, operand *op, int optype)
             if ( !PERMITTED(opt, optype, OP_INDIR) || op->value == NULL ) {
                 goto nomatch;
             }
+        case OP_DATA:
             opt = optype;
             break;
         case OP_PORT:
@@ -1234,10 +1234,10 @@ char *parse_cpu_special(char *start)
     return start;
 }
 
-taddr instruction_size(instruction *ip,  section *sec,taddr pc)
+size_t instruction_size(instruction *ip, section *sec, taddr pc)
 {
     mnemonic *opcode = &mnemonics[ip->code];
-    int       size;
+    size_t    size;
 
     /* Try and find the right opcode as necessary */
     if ( (opcode->ext.cpus & cpu_type)  ) {
@@ -1344,15 +1344,17 @@ taddr instruction_size(instruction *ip,  section *sec,taddr pc)
 
 
 
-static taddr apply_modifier(nreloc *reloc,taddr val)
+static taddr apply_modifier(rlist *rl, taddr val)
 {
     switch (modifier) {
     case LOBYTE:
-        reloc->mask = 0xff;
+        if (rl)
+            ((nreloc *)rl->reloc)->mask = 0xff;
         val = val & 0xff;
         break;
     case HIBYTE:
-        reloc->mask = 0xff00;
+        if (rl)
+            ((nreloc *)rl->reloc)->mask = 0xff00;
         val = (val >> 8) & 0xff;
         break;
     }
@@ -1493,7 +1495,7 @@ static void write_opcode(mnemonic *opcode, dblock *db, int size, section *sec, t
             if ( find_base(indexit->value, &base, sec, pc) == BASE_OK ) {
                 rl = add_nreloc(&db->relocs, base, val, REL_ABS, 8,
                                 cbmode ? ((d-1)-start)*8 : (d-start)*8);
-                val = apply_modifier((nreloc *)rl->reloc, val);
+                val = apply_modifier(rl, val);
             } else
                 general_error(38);  /* illegal relocation */
         }
@@ -1523,8 +1525,9 @@ static void write_opcode(mnemonic *opcode, dblock *db, int size, section *sec, t
                     if (modifier)
                         ierror(0);  /* @@@ Hi/Lo modifier makes no sense here? */
                 } else {
-                    rl = add_nreloc(&db->relocs, base, val, REL_ABS, exprsize * 8, (d - start) * 8);
-                    val = apply_modifier((nreloc *)rl->reloc, val);
+                    rl = add_nreloc(&db->relocs, base, val, REL_ABS,
+                                    exprsize * 8, (d - start) * 8);
+                    val = apply_modifier(rl, val);
                 }
                 
             } else {
@@ -1635,7 +1638,7 @@ static int is_offset_operand(operand *op)
     return 0;
 }
 
-dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
+dblock *eval_data(operand *op,size_t bitsize,section *sec,taddr pc)
 {
     dblock *db = new_dblock();
     taddr val;
@@ -1655,9 +1658,9 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
         if ( btype == BASE_OK || ( btype == BASE_PCREL && modifier == 0 ) ) {
             rl = add_nreloc(&db->relocs, base, val,
                             btype==BASE_PCREL ? REL_PC : REL_ABS, bitsize, 0);
-            val = apply_modifier((nreloc *)rl->reloc,val);
+            val = apply_modifier(rl, val);
         }
-        else
+        else if (btype != BASE_NONE)
             general_error(38);  /* illegal relocation */
     }
     if (bitsize < 16 && (val<-0x80 || val>0xff))
@@ -1671,6 +1674,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 {
     dblock *db;
     mnemonic *opcode = &mnemonics[ip->code];
+    symbol *base;
     unsigned char *d;
     taddr val = 0;
     int   size = 0, reg,offs = 0; 
@@ -1721,7 +1725,6 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
                     /* Create a temporary expression */
                     expr = parse_expr(&bufptr);
                     if ( eval_expr(expr, &val, sec, pc) == 0 ) {
-                        symbol *base;
                         if (find_base(expr, &base, sec, pc) == BASE_OK)
                             add_nreloc(&db->relocs,base, val, REL_ABS, 8, 8);
                         else
@@ -1816,8 +1819,6 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
     }
 
 
-
-
     db = new_dblock();
 
     db->size = size;
@@ -1847,14 +1848,14 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
               ((ip->op[1]->reg & REG_IX) && (ip->op[0]->reg & REG_IY)) )){
             cpu_error(23,opcode->name);
         }
-        // forbid ld ixl, (ix+0)
+        /* forbid ld ixl, (ix+0) */
         if ( (ip->op[0]->reg & (REG_IX |REG_IY)) &&
              (ip->op[1]->reg & (REG_IX|REG_IY)) &&
              (ip->op[1]->type & OP_OFFSET)
            ){
             cpu_error(23,opcode->name);
         }
-        // forbid ld ixl,(hl) or similar expressions 
+        /* forbid ld ixl,(hl) or similar expressions */
         if ( (ip->op[0]->reg & (REG_IX|REG_IY)) &&
              (ip->op[1]->reg & REG_PLAIN) == REG_HLREF)
         {
@@ -1863,13 +1864,13 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
         offs =  ((ip->op[0]->reg & REG_PLAIN) * 8) + ( ip->op[1]->reg & REG_PLAIN);
         break;
     case TYPE_ARITH16:
-        // Forbid instructions of type ld (hl), (memory)
+        /* Forbid instructions of type ld (hl), (memory) */
         if ( opcode->operand_type[1] && (opcode->operand_type[1] & (OP_ADDR)) &&
              opcode->operand_type[0] && (OP_INDIR) &&
              (ip->op[0]->reg & REG_PLAIN) == REG_HL) {
             cpu_error(25);
         }
-        // Forbid instructions of type ld (memory), (hl)
+        /* Forbid instructions of type ld (memory), (hl) */
         if (BASIC_TYPE(ip->op[0]->type) == OP_ABS16 && 
              BASIC_TYPE(ip->op[1]->type) == OP_HL) {
             cpu_error(25);
@@ -1987,9 +1988,19 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
         break;
     case TYPE_RST:
         if ( eval_expr(ip->op[0]->value, &val, sec, pc) == 0 ) {
-            cpu_error(19, opcode->name);
-            error = 1;
-        } else  if ( val >=0 && val <= 56 && val % 8 == 0) {
+            /* Also allow known labels from an absolute program segment */
+            if ( find_base(ip->op[0]->value, &base, sec, pc) != BASE_OK ) {
+                general_error(38);  /* illegal relocation */
+                error = 1;
+                break;
+            }
+            if ( !( base->sec->flags & ABSOLUTE ) || EXTREF(base) ) {
+                cpu_error(19, opcode->name);
+                error = 1;
+                break;
+            }
+            offs = val;
+        } else if ( (val & ~0x38) == 0 ) {
             if ( cpu_type == CPU_RCM2000 ) {
                 /* Check for valid rst on Rabbit */
                 if ( val == 0 ||  val == 8 || val == 0x30 ) {
@@ -2001,7 +2012,6 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
         } else {
             cpu_error(5, val, val);  /* rst out of range */
             error = 1;
-            break;
         }
         break;
     }

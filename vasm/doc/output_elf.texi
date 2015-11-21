@@ -3,7 +3,7 @@ selected with the @option{-Felf} option.
 
 @section Legal
 
-    This module is copyright in 2002-2011 by Frank Wille.
+    This module is copyright in 2002-2015 by Frank Wille.
 
     This archive may be redistributed without modifications and used
     for non-commercial purposes.
@@ -34,6 +34,7 @@ the following architectures:
 @item ARM
 @item i386
 @item x86_64
+@item Jaguar RISC
 
 @end itemize
 
@@ -58,4 +59,5 @@ This module has the following error messages:
 @item 3003: write error
 @item 3005: reloc type <m>, size <n>, mask <mask> (symbol <sym> + <offset>) not supported
 @item 3006: reloc type <n> not supported
+@item 3010: section <%s>: alignment padding (%lu) not a multiple of %lu at 0x%llx
 @end itemize

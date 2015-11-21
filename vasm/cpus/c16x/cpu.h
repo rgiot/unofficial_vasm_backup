@@ -12,6 +12,7 @@
 
 /* data type to represent a target-address */
 typedef int32_t taddr;
+typedef uint32_t utaddr;
 
 #define LITTLEENDIAN 1
 #define BIGENDIAN 0

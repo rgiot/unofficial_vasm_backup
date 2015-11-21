@@ -1,6 +1,6 @@
 /*
 ** cpu.c ARM cpu-description file
-** (c) in 2004,2006,2010,2011 by Frank Wille
+** (c) in 2004,2006,2010,2011,2014-2015 by Frank Wille
 */
 
 #include "vasm.h"
@@ -10,7 +10,7 @@ mnemonic mnemonics[] = {
 };
 int mnemonic_cnt = sizeof(mnemonics)/sizeof(mnemonics[0]);
 
-char *cpu_copyright = "vasm ARM cpu backend 0.2f (c) 2004,2006,2010,2011 Frank Wille";
+char *cpu_copyright = "vasm ARM cpu backend 0.4b (c) 2004,2006,2010,2011,2014-2015 Frank Wille";
 char *cpuname = "ARM";
 int bitsperbyte = 8;
 int bytespertaddr = 4;
@@ -29,11 +29,13 @@ static const char *condition_codes = "eqnecsccmiplvsvchilsgeltgtlealnvhsloul";
 static const char *addrmode_strings[] = {
   "da","ia","db","ib",
   "fa","fd","ea","ed",
-  "bt","tb","sb","sh","t","b","h","s","l",NULL,"<none>"
+  "bt","tb","sb","sh","t","b","h","s","l",
+  "p",NULL,"<none>"
 };
 enum {
   AM_DA=0,AM_IA,AM_DB,AM_IB,AM_FA,AM_FD,AM_EA,AM_ED,
-  AM_BT,AM_TB,AM_SB,AM_SH,AM_T,AM_B,AM_H,AM_S,AM_L,AM_NULL,AM_NONE
+  AM_BT,AM_TB,AM_SB,AM_SH,AM_T,AM_B,AM_H,AM_S,AM_L,
+  AM_P,AM_NULL,AM_NONE
 };
 
 #define NUM_SHIFTTYPES 6
@@ -43,7 +45,6 @@ static const char *shift_strings[NUM_SHIFTTYPES] = {
 
 static int OC_SWP,OC_NOP;
 static int elfoutput = 0;       /* output will be an ELF object file */
-static hashtable *regsymhash;   /* hash-table for ARM register symbols */
 
 static section *last_section = 0;
 static int last_data_type = -1; /* for mapping symbol generation */
@@ -65,24 +66,6 @@ operand *new_operand(void)
 int cpu_available(int idx)
 {
   return (mnemonics[idx].ext.available & cpu_type) != 0;
-}
-
-
-static int addregsym(char *sym,int val)
-/* add a new register symbol, return 0 if already exists */
-{
-  hashdata data;
-  regsym *new;
-
-  if (find_name_nc(regsymhash,sym,&data))
-    return 0;
-
-  data.ptr = new = mymalloc(sizeof(regsym));
-  new->name = mymalloc(strlen(sym)+1);
-  strcpy(new->name,sym);
-  new->value = val;
-  add_hashentry(regsymhash,new->name,data);
-  return 1;
 }
 
 
@@ -125,12 +108,14 @@ char *parse_instruction(char *s,int *inst_len,char **ext,int *ext_len,
 
   else {  /* ARM mode - we might have up to 2 different qualifiers */
     int len = s - inst;
+    char c = tolower((unsigned char)*inst);
 
     if (len > 2) {
-      if (*inst=='b' && strncmp(inst,"bic",3) && (len==3 || len==4)) {
+      if (c=='b' && strnicmp(inst,"bic",3) && (len==3 || len==4)) {
         *inst_len = len - 2;
       }
-      else if ((*inst=='u' || *inst=='s') && *(inst+1)=='m' && len>=5) {
+      else if ((c=='u' || c=='s') &&
+               tolower((unsigned char)*(inst+1))=='m' && len>=5) {
         *inst_len = 5;
       }
       else
@@ -144,7 +129,7 @@ char *parse_instruction(char *s,int *inst_len,char **ext,int *ext_len,
           const char *cc = condition_codes;
 
           while (*cc) {
-            if (*p==*cc && *(p+1)==*(cc+1))
+            if (!strnicmp(p,cc,2))
               break;
             cc += 2;
           }
@@ -159,12 +144,12 @@ char *parse_instruction(char *s,int *inst_len,char **ext,int *ext_len,
           const char **am = addrmode_strings;
 
           do {
-            if (len==strlen(*am) && !strncmp(*am,p,len))
+            if (len==strlen(*am) && !strnicmp(*am,p,len))
               break;
             am++;
           }
           while (*am);
-          if (*am!=NULL || (len==1 && *p=='s')) {
+          if (*am!=NULL || (len==1 && tolower((unsigned char)*p)=='s')) {
             ext[cnt] = p;
             ext_len[cnt++] = len;
           }
@@ -193,19 +178,17 @@ int set_default_qualifiers(char **q,int *q_len)
 static int parse_reg(char **pp)
 /* parse register, return -1 on error */
 {
-  hashdata data;
   char *p = *pp;
   char *name = p;
+  regsym *sym;
 
   if (ISIDSTART(*p)) {
     p++;
     while (ISIDCHAR(*p))
       p++;
-    if (find_namelen_nc(regsymhash,name,p-name,&data)) {
-      regsym *sym = data.ptr;
-
+    if (sym = find_regsym_nc(name,p-name)) {
       *pp = p;
-      return sym->value;
+      return sym->reg_num;
     }
   }
   return -1;  /* no valid register found */
@@ -215,7 +198,6 @@ static int parse_reg(char **pp)
 static int parse_reglist(char **pp)
 /* parse register-list, return -1 on error */
 {
-  hashdata data;
   int r=0,list=0,lastreg=-1;
   char *p = *pp;
   char *name;
@@ -229,13 +211,12 @@ static int parse_reglist(char **pp)
         name = p++;
         while (ISIDCHAR(*p))
           p++;
-        if (find_namelen_nc(regsymhash,name,p-name,&data)) {
-          sym = data.ptr;
-          r = sym->value;
+        if (sym = find_regsym_nc(name,p-name)) {
+          r = sym->reg_num;
           if (lastreg >= 0) {  /* range-mode? */
             if (lastreg < r) {
               r = lastreg;
-              lastreg = sym->value;
+              lastreg = sym->reg_num;
             }
             for (; r<=lastreg; list |= 1<<r++);
           }
@@ -277,7 +258,11 @@ int parse_operand(char *p,int len,operand *op,int optype)
   op->value = NULL;
   p = skip(p);
 
-  if (thumb_mode) {
+  if (optype == DATA64_OP) {
+    op->value = parse_expr_huge(&p);
+  }
+
+  else if (thumb_mode) {
     if (ARMOPER(optype)) {   /* standard ARM instruction */
       return PO_NOMATCH;
     }
@@ -571,7 +556,7 @@ static void create_mapping_symbol(int type,section *sec,taddr pc)
 }
 
 
-taddr eval_thumb_operands(instruction *ip,section *sec,taddr pc,
+size_t eval_thumb_operands(instruction *ip,section *sec,taddr pc,
                           uint16_t *insn,dblock *db)
 /* evaluate expressions and try to optimize THUMB instruction,
    return size of instruction */
@@ -579,7 +564,7 @@ taddr eval_thumb_operands(instruction *ip,section *sec,taddr pc,
   operand op;
   mnemonic *mnemo = &mnemonics[ip->code];
   int opcnt = 0;
-  taddr isize = 2;
+  size_t isize = 2;
 
   if (insn) {
     if (pc & 1)
@@ -596,7 +581,7 @@ taddr eval_thumb_operands(instruction *ip,section *sec,taddr pc,
       *insn = (uint16_t)mnemo->ext.opcode;
   }
 
-  for (opcnt=0; ip->op[opcnt]!=NULL && opcnt<MAX_OPERANDS; opcnt++) {
+  for (opcnt=0; opcnt<MAX_OPERANDS && ip->op[opcnt]!=NULL; opcnt++) {
     taddr val;
     symbol *base = NULL;
     int btype;
@@ -610,7 +595,7 @@ taddr eval_thumb_operands(instruction *ip,section *sec,taddr pc,
     if (op.type==TPCLW || THBRANCH(op.type)) {
       /* PC-relative offsets (take prefetch into account: PC+4) */
       if (base!=NULL && btype==BASE_OK) {
-        if (base->type==LABSYM && base->sec==sec) {
+        if (!is_pc_reloc(base,sec)) {
           /* no relocation required, can be resolved immediately */
           if (op.type == TPCLW) {
             /* bit 1 of PC is forced to 0 */
@@ -962,7 +947,7 @@ static uint32_t get_condcode(instruction *ip)
     uint32_t code = 0;
 
     while (*cc) {
-      if (*q==*cc && *(q+1)==*(cc+1) && *(q+2)=='\0')
+      if (!strnicmp(q,cc,2) && *(q+2)=='\0')
         break;
       cc += 2;
       code++;
@@ -994,7 +979,7 @@ static int get_addrmode(instruction *ip)
     int mode = AM_DA;
 
     do {
-      if (!strcmp(*am,q))
+      if (!stricmp(*am,q))
         break;
       am++;
       mode++;
@@ -1009,8 +994,8 @@ static int get_addrmode(instruction *ip)
 }
 
 
-taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
-                        uint32_t *insn,dblock *db)
+size_t eval_arm_operands(instruction *ip,section *sec,taddr pc,
+                         uint32_t *insn,dblock *db)
 /* evaluate expressions and try to optimize ARM instruction,
    return size of instruction */
 {
@@ -1019,7 +1004,7 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
   int am = get_addrmode(ip);
   int aa4ldst = 0;
   int opcnt = 0;
-  taddr isize = 4;
+  size_t isize = 4;
   taddr chkreg = -1;
 
   if (insn) {
@@ -1028,9 +1013,14 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
 
     *insn = mnemo->ext.opcode | get_condcode(ip);
 
-    if (mnemo->ext.flags & SETCC) {
-      if (am == AM_S)
-        *insn |= 0x00100000;  /* set-condition-codes flag */
+    if ((mnemo->ext.flags & SETCC)!=0 && am==AM_S)
+      *insn |= 0x00100000;  /* set-condition-codes flag */
+
+    if ((mnemo->ext.flags & SETPSR)!=0 && am==AM_P) {
+      /* Rd = R15 for changing the PSR. Recommended for ARM2/250/3 only. */
+      *insn |= 0x0000f000;
+      if (cpu_type & ~AA2)
+        cpu_error(28);  /* deprecated on 32-bit architectures */
     }
 
     if (!strcmp(mnemo->name,"ldr") || !strcmp(mnemo->name,"str")) {
@@ -1076,7 +1066,7 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
       aa4ldst = 1;
   }
 
-  for (opcnt=0; ip->op[opcnt]!=NULL && opcnt<MAX_OPERANDS; opcnt++) {
+  for (opcnt=0; opcnt<MAX_OPERANDS && ip->op[opcnt]!=NULL; opcnt++) {
     taddr val;
     symbol *base = NULL;
     int btype;
@@ -1091,7 +1081,7 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
         op.type==PCLCP || op.type==BRA24) {
       /* PC-relative offsets (take prefetch into account: PC+8) */
       if (base!=NULL && btype==BASE_OK) {
-        if (base->type==LABSYM && base->sec==sec) {
+        if (!is_pc_reloc(base,sec)) {
           /* no relocation required, can be resolved immediately */
           val -= pc + 8;
 
@@ -1372,7 +1362,7 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
 
         if (base) {
           if (btype == BASE_OK) {
-            if (base->type == IMPORT) {
+            if (EXTREF(base)) {
               if (!aa4ldst) {
                 /* @@@ does this make any sense? */
                 *insn |= 0x00800000;  /* only UP */
@@ -1418,6 +1408,26 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
         }
         else
           cpu_error(16);  /* 24-bit unsigned immediate expected */
+        if (base)
+          cpu_error(6);  /* constant integer expression required */
+      }
+
+      else if (op.type == IROTV) {
+        /* insert 4-bit rotate constant (even value, shifted right) */
+        if (val>=0 && val<=30 && (val&1)==0)
+          *insn |= val << 7;
+        else
+          cpu_error(29,(long)val);  /* must be even number between 0 and 30 */
+        if (base)
+          cpu_error(6);  /* constant integer expression required */
+      }
+
+      else if (op.type == IMMD8) {
+        /* unsigned 8-bit immediate constant, used together with IROTV */
+        if (val>=0 && val<0x100 && base==NULL)
+          *insn |= val;
+        else
+          cpu_error(30,8,(long)val);  /* 8-bit unsigned constant required */
       }
 
       else if (SHIFTOPER(op.type)) {
@@ -1510,7 +1520,7 @@ taddr eval_arm_operands(instruction *ip,section *sec,taddr pc,
 }
 
 
-taddr instruction_size(instruction *ip,section *sec,taddr pc)
+size_t instruction_size(instruction *ip,section *sec,taddr pc)
 /* Calculate the size of the current instruction; must be identical
    to the data created by eval_instruction. */
 {
@@ -1566,7 +1576,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 }
 
 
-dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
+dblock *eval_data(operand *op,size_t bitsize,section *sec,taddr pc)
 /* Create a dblock (with relocs, if necessary) for size bits of data. */
 {
   dblock *db = new_dblock();
@@ -1577,38 +1587,46 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
     last_data_type = -1;
   }
 
-  if ((bitsize & 7) || bitsize > 32)
+  if ((bitsize & 7) || bitsize > 64)
     cpu_error(17,bitsize);  /* data size not supported */
 
-  if (op->type != DATA_OP)
+  if (op->type!=DATA_OP && op->type!=DATA64_OP)
     ierror(0);
 
   db->size = bitsize >> 3;
   db->data = mymalloc(db->size);
 
-  if (!eval_expr(op->value,&val,sec,pc)) {
-    symbol *base;
-    int btype;
+  if (op->type == DATA64_OP) {
+    thuge hval;
 
-    btype = find_base(op->value,&base,sec,pc);
-    if (base)
-      add_nreloc(&db->relocs,base,val,
-                 btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
-    else
-      general_error(38);  /* illegal relocation */
+    if (!eval_expr_huge(op->value,&hval))
+      general_error(59);  /* cannot evaluate huge integer */
+    huge_to_mem(arm_be_mode,db->data,db->size,hval);
   }
+  else {
+    if (!eval_expr(op->value,&val,sec,pc)) {
+      symbol *base;
+      int btype;
 
-  switch (db->size) {
-    case 1:
-      db->data[0] = val & 0xff;
-      break;
-    case 2:
-    case 4:
-      setval(arm_be_mode,db->data,db->size,val);
-      break;
-    default:
-      ierror(0);
-      break;
+      btype = find_base(op->value,&base,sec,pc);
+      if (base)
+        add_nreloc(&db->relocs,base,val,
+                   btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
+      else if (btype != BASE_NONE)
+        general_error(38);  /* illegal relocation */
+    }
+    switch (db->size) {
+      case 1:
+        db->data[0] = val & 0xff;
+        break;
+      case 2:
+      case 4:
+        setval(arm_be_mode,db->data,db->size,val);
+        break;
+      default:
+        ierror(0);
+        break;
+    }
   }
 
   if (last_data_type != TYPE_DATA)
@@ -1634,33 +1652,32 @@ int init_cpu()
     elfoutput = 1;
 
   /* define register symbols */
-  regsymhash = new_hashtable(REGSYMHTSIZE);
   for (i=0; i<16; i++) {
     sprintf(r,"r%d",i);
-    addregsym(r,i);
+    new_regsym(0,1,r,0,0,i);
     sprintf(r,"c%d",i);
-    addregsym(r,i);
+    new_regsym(0,1,r,0,0,i);
     sprintf(r,"p%d",i);
-    addregsym(r,i);
+    new_regsym(0,1,r,0,0,i);
   }
   /* ATPCS synonyms */
   for (i=0; i<8; i++) {
     if (i < 4) {
       sprintf(r,"a%d",i+1);
-      addregsym(r,i);
+      new_regsym(0,1,r,0,0,i);
     }
     sprintf(r,"v%d",i+1);
-    addregsym(r,i+4);
+    new_regsym(0,1,r,0,0,i+4);
   }
   /* well known aliases */
-  addregsym("wr",7);
-  addregsym("sb",9);
-  addregsym("sl",10);
-  addregsym("fp",11);
-  addregsym("ip",12);
-  addregsym("sp",13);
-  addregsym("lr",14);
-  addregsym("pc",15);
+  new_regsym(0,1,"wr",0,0,7);
+  new_regsym(0,1,"sb",0,0,9);
+  new_regsym(0,1,"sl",0,0,10);
+  new_regsym(0,1,"fp",0,0,11);
+  new_regsym(0,1,"ip",0,0,12);
+  new_regsym(0,1,"sp",0,0,13);
+  new_regsym(0,1,"lr",0,0,14);
+  new_regsym(0,1,"pc",0,0,15);
 
   return 1;
 }

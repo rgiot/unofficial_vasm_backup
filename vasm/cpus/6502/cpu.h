@@ -1,6 +1,6 @@
 /*
 ** cpu.h 650x/651x cpu-description header-file
-** (c) in 2002,2008,2009 by Frank Wille
+** (c) in 2002,2008,2009,2014 by Frank Wille
 */
 
 #define BIGENDIAN 0
@@ -15,6 +15,7 @@
 
 /* data type to represent a target-address */
 typedef int16_t taddr;
+typedef uint16_t utaddr;
 
 /* minimum instruction alignment */
 #define INST_ALIGN 1
@@ -56,6 +57,7 @@ typedef struct {
 #define M6502    1       /* standard 6502 instruction set */
 #define ILL      2       /* illegal 6502 instructions */
 #define DTV      4       /* C64 DTV instruction set extension */
+#define M65C02   8       /* 65C02 instruction set */
 
 
 /* adressing modes */
@@ -66,16 +68,18 @@ typedef struct {
 #define INDIR    4       /* ($1234) - JMP only */
 #define INDX     5       /* ($12,X) */
 #define INDY     6       /* ($12),Y */
-#define ZPAGE    7       /* add ZPAGE-ABS to optimize ABS/ABSX/ABSY */
-#define ZPAGEX   8
-#define ZPAGEY   9
-#define RELJMP   10      /* B!cc/JMP construction */
-#define REL      11      /* $1234 - relative branch */
-#define IMMED    12      /* #$12 */
-#define DATAOP	 13	 /* data operand */
-#define ACCU     14      /* A */
-#define DUMX     15      /* dummy X as 'second' operand */
-#define DUMY     16      /* dummy Y as 'second' operand */
+#define DPINDIR  7       /* ($12) */
+#define INDIRX   8       /* ($1234,X) */
+#define ZPAGE    9       /* add ZPAGE-ABS to optimize ABS/ABSX/ABSY */
+#define ZPAGEX   10
+#define ZPAGEY   11
+#define RELJMP   12      /* B!cc/JMP construction */
+#define REL      13      /* $1234 - relative branch */
+#define IMMED    14      /* #$12 */
+#define DATAOP   15      /* data operand */
+#define ACCU     16      /* A */
+#define DUMX     17      /* dummy X as 'second' operand */
+#define DUMY     18      /* dummy Y as 'second' operand */
 
 
 /* exported by cpu.c */

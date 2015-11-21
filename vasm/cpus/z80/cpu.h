@@ -41,6 +41,7 @@
 
 /* data type to represent a target-address */
 typedef int32_t taddr;
+typedef uint32_t utaddr;
 
 #define HAVE_INSTRUCTION_EXTENSION 1
 typedef struct {
@@ -56,7 +57,7 @@ typedef struct {
 #define DATA_ALIGN(n) 1
 
 /* operand class for n-bit data definitions */
-#define DATA_OPERAND(n) OP_ABS
+#define DATA_OPERAND(n) OP_DATA
 
 /* we define two additional unary operations, '<' and '>' */
 int ext_unary_eval(int,taddr,taddr *,int);
@@ -220,6 +221,7 @@ typedef struct {
 #define OP_IDX32  0x25
 #define OP_SU     0x26
 #define OP_HTR    0x27
+#define OP_DATA   0x3e
 
 #define OP_MASK     0x3f     /* Gets the basic operation out */
 

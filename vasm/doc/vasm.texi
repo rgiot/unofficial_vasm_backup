@@ -1,3 +1,8 @@
+\ifx\pdfminorversion\undefined
+ \pdfoptionpdfminorversion=3
+\else
+ \pdfminorversion=3
+\fi
 \input texinfo
 
 @setfilename index.texi
@@ -8,7 +13,7 @@
 
 This is the manual for the vasm assembler system.
 
-Copyright 2002-2011 Volker Barthelmann
+Copyright 2002-2015 Volker Barthelmann
 
 @end ifinfo
 
@@ -49,7 +54,7 @@ or analyzing the output.
 
 @section Legal
 
-    vasm is copyright in 2002-2011 by Volker Barthelmann.
+    vasm is copyright in 2002-2015 by Volker Barthelmann.
 
     This archive may be redistributed without modifications and used
     for non-commercial purposes.
@@ -88,13 +93,13 @@ Detailed instructions how to build vasm can be found in the last chapter.
 @chapter Mot Syntax Module
 @include syntax_mot.texi
 
+@node Madmac Syntax Module
+@chapter Madmac Syntax Module
+@include syntax_madmac.texi
+
 @node Oldstyle Syntax Module
 @chapter Oldstyle Syntax Module
 @include syntax_oldstyle.texi
-
-@node Simple binary output module
-@chapter Simple binary output module
-@include output_bin.texi
 
 @node Test output module
 @chapter Test output module
@@ -112,13 +117,21 @@ Detailed instructions how to build vasm can be found in the last chapter.
 @chapter TOS output module
 @include output_tos.texi
 
+@node Amiga output module
+@chapter Amiga output module
+@include output_hunk.texi
+
 @node vobj output module
 @chapter vobj output module
 @include output_vobj.texi
 
-@node Amiga output module
-@chapter Amiga output module
-@include output_hunk.texi
+@node Simple binary output module
+@chapter Simple binary output module
+@include output_bin.texi
+
+@node Motorola srecord output module
+@chapter Motorola srecord output module
+@include output_srec.texi
 
 @node m68k cpu module
 @chapter m68k cpu module
@@ -147,6 +160,18 @@ Detailed instructions how to build vasm can be found in the last chapter.
 @node z80 cpu module
 @chapter z80 cpu module
 @include cpu_z80.texi
+
+@node 6800 cpu module
+@chapter 6800 cpu module
+@include cpu_6800.texi
+
+@node Jaguar RISC cpu module
+@chapter Jaguar RISC cpu module
+@include cpu_jagrisc.texi
+
+@node Trillek TR3200 cpu module
+@chapter Trillek TR3200 cpu module
+@include cpu_tr3200.texi
 
 @node Interface
 @chapter Interface

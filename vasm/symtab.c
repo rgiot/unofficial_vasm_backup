@@ -1,5 +1,5 @@
 /* symtab.c  hashtable file for vasm */
-/* (c) in 2002-2004,2008,2011 by Volker Barthelmann and Frank Wille */
+/* (c) in 2002-2004,2008,2011,2014 by Volker Barthelmann and Frank Wille */
 
 #include "vasm.h"
 
@@ -64,6 +64,26 @@ void add_hashentry(hashtable *ht,char *name,hashdata data)
   }
   new->next=ht->entries[i];
   ht->entries[i]=new;
+}
+
+/* remove from hashtable; name must be unique */
+void rem_hashentry(hashtable *ht,char *name,int no_case)
+{
+  size_t i=no_case?(hashcode_nc(name)%ht->size):(hashcode(name)%ht->size);
+  hashentry *p,*last;
+
+  for(p=ht->entries[i],last=NULL;p;p=p->next){
+    if((no_case&&!stricmp(name,p->name))||(!no_case&&!strcmp(name,p->name))){
+      if(last==NULL)
+        ht->entries[i]=p->next;
+      else
+        last->next=p->next;
+      myfree(p);
+      return;
+    }
+    last=p;
+  }
+  ierror(0);
 }
 
 /* finds unique entry in hashtable */

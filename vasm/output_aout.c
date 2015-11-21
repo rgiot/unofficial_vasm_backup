@@ -1,16 +1,14 @@
 /* output_aout.c a.out output driver for vasm */
-/* (c) in 2008-2012 by Frank Wille */
+/* (c) in 2008-2015 by Frank Wille */
 
 #include "vasm.h"
 #include "output_aout.h"
-#if MID
-static char *copyright="vasm a.out output module 0.5 (c) 2008-2012 Frank Wille";
-
-static int mid = MID;
+#if defined(OUTAOUT) && defined(MID)
+static char *copyright="vasm a.out output module 0.7 (c) 2008-2015 Frank Wille";
 
 static section *sections[3];
-static taddr secsize[3];
-static taddr secoffs[3];
+static utaddr secsize[3];
+static utaddr secoffs[3];
 static int sectype[] = { N_TEXT, N_DATA, N_BSS };
 static int secweak[] = { N_WEAKT, N_WEAKD, N_WEAKB };
 
@@ -19,15 +17,20 @@ static struct StrTabList aoutstrlist;
 static struct list treloclist;
 static struct list dreloclist;
 
+static int mid = -1;
 static int isPIC = 1;
 
 #define SECT_ALIGN 4  /* .text and .data are aligned to 32 bits */
 
 
-static unsigned int get_sec_type(section *s)
-/* scan section attributes for type, 0=text, 1=data, 2=bss */
+static int get_sec_type(section *s)
+/* scan section attributes for type, 0=text, 1=data, 2=bss,
+   -1: ORG-section at an absolute address */
 {
   char *a = s->attr;
+
+  if (s->flags & ABSOLUTE)
+    return -1;
 
   while (*a) {
     switch (*a++) {
@@ -83,13 +86,13 @@ static int aout_getbind(symbol *sym)
 }
 
 
-static unsigned long aoutstd_getrinfo(rlist *rl,int xtern,char *sname,int be)
+static uint32_t aoutstd_getrinfo(rlist *rl,int xtern,char *sname,int be)
 /* Convert vasm relocation type into standard a.out relocations, */
 /* as used by M68k and x86 targets. */
 /* For xtern=-1, return true when this relocation requires a base symbol. */
 {
   nreloc *nr;
-  unsigned long r=0,s=4;
+  uint32_t r=0,s=4;
   int b=0;
 
   if (nr = (nreloc *)rl->reloc) {
@@ -124,8 +127,13 @@ static unsigned long aoutstd_getrinfo(rlist *rl,int xtern,char *sname,int be)
 }
 
 
-static void aout_initwrite(section *sec)
+static void aout_initwrite(section *firstsec)
 {
+  section *sec;
+
+  if (mid == -1)
+    mid = MID;
+
   initlist(&aoutstrlist.l);
   aoutstrlist.hashtab = mycalloc(STRHTABSIZE*sizeof(struct StrTabNode *));
   aoutstrlist.nextoffset = 4;  /* first string is always at offset 4 */
@@ -139,13 +147,15 @@ static void aout_initwrite(section *sec)
   sections[_TEXT] = sections[_DATA] = sections[_BSS] = NULL;
   secsize[_TEXT] = secsize[_DATA] = secsize[_BSS] = 0;
 
-  for (; sec; sec=sec->next) {
+  for (sec=firstsec; sec; sec=sec->next) {
     int i;
 
     /* section size is assumed to be in in (sec->pc - sec->org), otherwise
        we would have to calculate it from the atoms and store it there */
-    if ((sec->pc - sec->org) > 0 || (sec->flags & HAS_SYMBOLS)) {
+    if (get_sec_size(sec) > 0 || (sec->flags & HAS_SYMBOLS)) {
       i = get_sec_type(sec);
+      if (i < 0)
+        continue;  /* ignore ORG sections for later */
       if (!sections[i]) {
         sections[i] = sec;
         secsize[i] = get_sec_size(sec);
@@ -156,6 +166,12 @@ static void aout_initwrite(section *sec)
     }
   }
 
+  /* now scan for absolute ORG-sections and add their aligned size to .text */
+  for (sec=firstsec; sec; sec=sec->next) {
+    if (sec->flags & ABSOLUTE)
+      secsize[_TEXT] += balign(secsize[_TEXT],sec->align) + get_sec_size(sec);
+  }
+
   secoffs[_TEXT] = 0;
   secoffs[_DATA] = secsize[_TEXT] + balign(secsize[_TEXT],SECT_ALIGN);
   secoffs[_BSS] = secoffs[_DATA] + secsize[_DATA] +
@@ -163,16 +179,19 @@ static void aout_initwrite(section *sec)
 }
 
 
-static unsigned long aout_addstr(char *s)
+static uint32_t aout_addstr(char *s)
 /* add a new symbol name to the string table and return its offset */
 {
-  struct StrTabNode **chain = &aoutstrlist.hashtab[hashcode(s)%STRHTABSIZE];
+  struct StrTabNode **chain;
   struct StrTabNode *sn;
 
+  if (s == NULL)
+    return 0;
   if (*s == '\0')
     return 0;
 
   /* search string in hash table */
+  chain = &aoutstrlist.hashtab[hashcode(s)%STRHTABSIZE];
   while (sn = *chain) {
     if (!strcmp(s,sn->str))
       return (sn->offset);  /* it's already in, return offset */
@@ -190,29 +209,37 @@ static unsigned long aout_addstr(char *s)
 }
 
 
-static unsigned long aout_addsym(char *name,taddr value,int bind,
-                                 int info,int type,int desc,int be)
+static struct SymbolNode *aout_addsym(char *name,uint8_t type,int8_t other,
+                                      int16_t desc,uint32_t value,int be)
+/* append a new symbol to the symbol list */
+{
+  struct SymbolNode *sym = mycalloc(sizeof(struct SymbolNode));
+
+  sym->name = name!=NULL ? name : emptystr;
+  sym->index = aoutsymlist.nextindex++;
+  setval(be,&sym->s.n_strx,4,aout_addstr(name));
+  sym->s.n_type = type;
+  sym->s.n_other = other;
+  setval(be,&sym->s.n_desc,2,desc);
+  setval(be,&sym->s.n_value,4,value);
+  addtail(&aoutsymlist.l,&sym->n);
+  return sym;
+}
+
+
+static uint32_t aout_addsymhash(char *name,taddr value,int bind,
+                                int info,int type,int desc,int be)
 /* add a new symbol, return its symbol table index */
 {
-  struct SymbolNode **chain = &aoutsymlist.hashtab[hashcode(name)%SYMHTABSIZE];
-  struct SymbolNode *sym;
+  struct SymbolNode **chain,*sym;
 
+  chain = &aoutsymlist.hashtab[hashcode(name?name:emptystr)%SYMHTABSIZE];
   while (sym = *chain)
     chain = &sym->hashchain;
-  /* new symbol table entry */
-  *chain = sym = mycalloc(sizeof(struct SymbolNode));
 
-  if (!name)
-    name = emptystr;
-  sym->name = name;
-  sym->index = aoutsymlist.nextindex++;
-  setval(be,sym->s.n_strx,4,aout_addstr(name));
-  sym->s.n_type = type;
-  /* GNU binutils don't use BIND_LOCAL/GLOBAL in a.out files! We do! */
-  sym->s.n_other = ((bind&0xf)<<4) | (info&0xf);
-  setval(be,sym->s.n_desc,2,desc);
-  setval(be,sym->s.n_value,4,value);
-  addtail(&aoutsymlist.l,&sym->n);
+  /* new symbol table entry */
+  *chain = sym = aout_addsym(name,type,((bind&0xf)<<4)|(info&0xf),
+                             desc,value,be);
   return sym->index;
 }
 
@@ -224,7 +251,7 @@ static int aout_findsym(char *name,int be)
   struct SymbolNode *sym;
 
   while (sym = *chain) {
-    if (!strcmp(name,sym->name))
+    if (!strcmp(name,sym->name) && !(sym->s.n_type & N_STAB))
       return ((int)sym->index);
     chain = &sym->hashchain;
   }
@@ -255,6 +282,8 @@ static void aout_symconvert(symbol *sym,int symbind,int syminfo,int be)
       #else
       type = N_UNDF | N_EXT;
       #endif
+      val = size;
+      size = 0;
     }
     else if (sym->flags & WEAK) {
       /* weak symbol */
@@ -267,8 +296,12 @@ static void aout_symconvert(symbol *sym,int symbind,int syminfo,int be)
     }
     else if (sym->sec) {
       /* address symbol */
-      type = sectype[sym->sec->idx] | ext;
-      val += secoffs[sym->sec->idx];  /* a.out requires to add sec. offset */
+      if (!(sym->flags & ABSLABEL)) {
+        type = sectype[sym->sec->idx] | ext;
+        val += secoffs[sym->sec->idx];  /* a.out requires to add sec. offset */
+      }
+      else  /* absolute ORG section: convert labels to ABS symbols */
+        type = N_ABS | ext;
     }
     else if (sym->type==EXPRESSION) {
       if (sym->flags & EXPORT) {
@@ -279,18 +312,18 @@ static void aout_symconvert(symbol *sym,int symbind,int syminfo,int be)
         return;  /* ignore local expressions */
     }
     /* @@@ else if (indirect symbols?) {
-      aout_addsym(sym->name,0,symbind,0,N_INDR|ext,0,be);
-      aout_addsym(sym->indir_name,0,0,0,N_UNDF|N_EXT,0,be);
+      aout_addsymhash(sym->name,0,symbind,0,N_INDR|ext,0,be);
+      aout_addsymhash(sym->indir_name,0,0,0,N_UNDF|N_EXT,0,be);
       return;
     }*/
     else
       ierror(0);
   }
 
-  aout_addsym(sym->name,val,symbind,syminfo,type,0,be);
+  aout_addsymhash(sym->name,val,symbind,syminfo,type,0,be);
   if (size) {
     /* append N_SIZE symbol declaring the previous symbol's size */
-    aout_addsym(sym->name,size,symbind,syminfo,N_SIZE,0,be);
+    aout_addsymhash(sym->name,size,symbind,syminfo,N_SIZE,0,be);
   }
 }
 
@@ -300,7 +333,7 @@ static void aout_addsymlist(symbol *sym,int bind,int type,int be)
 {
   for (; sym; sym=sym->next) {
     /* ignore symbols preceded by a '.' and internal symbols */
-    if ((sym->type!=IMPORT || (sym->flags&WEAK))
+    if ((sym->type!=IMPORT || (sym->flags&WEAK) || (sym->flags&COMMON))
         && *sym->name != '.' && *sym->name!=' ' && !(sym->flags&VASMINTERN)) {
       int syminfo = aout_getinfo(sym);
       int symbind = aout_getbind(sym);
@@ -313,8 +346,27 @@ static void aout_addsymlist(symbol *sym,int bind,int type,int be)
 }
 
 
-static void aout_addreloclist(struct list *rlst,unsigned long raddr,
-                              unsigned long rindex,unsigned long rinfo,int be)
+static void aout_debugsyms(int be)
+/* add stabs to the a.out symbol list */
+{
+  struct stabdef *nlist = first_nlist;
+  uint32_t val;
+
+  while (nlist != NULL) {
+    val = nlist->value;
+    if (nlist->base != NULL) {
+      /* include section base offset in symbol value */
+      if (!(nlist->base->flags & ABSLABEL))
+        val += secoffs[nlist->base->sec->idx];
+    }
+    aout_addsym(nlist->name.ptr,nlist->type,nlist->other,nlist->desc,val,be);
+    nlist = nlist->next;
+  }
+}
+
+
+static void aout_addreloclist(struct list *rlst,uint32_t raddr,
+                              uint32_t rindex,uint32_t rinfo,int be)
 /* add new relocation_info to .text or .data reloc-list */
 {
   struct RelocNode *rn = mymalloc(sizeof(struct RelocNode));
@@ -332,12 +384,12 @@ static void aout_addreloclist(struct list *rlst,unsigned long raddr,
 }
 
 
-static unsigned long aout_convert_rlist(int be,atom *a,int secid,
-                                        struct list *rlst,taddr pc,
-                          unsigned long (*getrinfo)(rlist *,int,char *,int))
+static uint32_t aout_convert_rlist(int be,atom *a,int secid,
+                                   struct list *rlst,taddr pc,
+                                   uint32_t (*getrinfo)(rlist *,int,char *,int))
 /* convert all of an atom's relocs into a.out relocations */
 {
-  unsigned long rsize = 0;
+  uint32_t rsize = 0;
   rlist *rl;
 
   if (a->type == DATA)
@@ -359,7 +411,7 @@ static unsigned long aout_convert_rlist(int be,atom *a,int secid,
     int based = getrinfo(rl,-1,sections[secid]->name,be) != 0;
 #endif
 
-    if (refsym->type == LABSYM) {
+    if (LOCREF(refsym)) {
       /* this is a local relocation */
       int rsecid = refsym->sec->idx;
 
@@ -367,17 +419,17 @@ static unsigned long aout_convert_rlist(int be,atom *a,int secid,
                         getrinfo(rl,0,sections[secid]->name,be),
                         be);
 #if SDAHACK
-      if (!based)  /* @@@ 'based' does not really happen in Unix */
+      if (!based)  /* @@@ 'based' does not really happen under Unix */
 #endif
         val += secoffs[rsecid];
       rsize += sizeof(struct relocation_info);
     }
-    else if (refsym->type == IMPORT) {
+    else if (EXTREF(refsym)) {
       /* this is an external symbol reference */
       int symidx;
 
       if ((symidx = aout_findsym(refsym->name,be)) == -1)
-        symidx = aout_addsym(refsym->name,0,0,0,N_UNDF|N_EXT,0,be);
+        symidx = aout_addsymhash(refsym->name,0,0,0,N_UNDF|N_EXT,0,be);
       aout_addreloclist(rlst,pc+(r->offset>>3),symidx,
                         getrinfo(rl,1,sections[secid]->name,be),
                         be);
@@ -402,20 +454,18 @@ static unsigned long aout_convert_rlist(int be,atom *a,int secid,
 }
 
 
-static unsigned long aout_addrelocs(int be,int secid,struct list *rlst,
-                        unsigned long (*getrinfo)(rlist *,int,char *,int))
+static uint32_t aout_addrelocs(int be,int secid,struct list *rlst,
+                               uint32_t (*getrinfo)(rlist *,int,char *,int))
 /* creates a.out relocations for a single section (.text or .data) */
 {
-  unsigned long rtabsize=0;
+  uint32_t rtabsize=0;
 
   if (sections[secid]) {
     atom *a;
     taddr pc=0,npc;
 
     for (a=sections[secid]->first; a; a=a->next) {
-      int align = a->align;
-
-      npc = ((pc + align-1) / align) * align;
+      npc = pcalign(a,pc);
       rtabsize += aout_convert_rlist(be,a,secid,rlst,npc,getrinfo);
       pc = npc + atom_size(a,sections[secid],npc);
     }
@@ -424,11 +474,10 @@ static unsigned long aout_addrelocs(int be,int secid,struct list *rlst,
 }
 
 
-static void aout_header(FILE *f,unsigned long mag,unsigned long flag,
-                        unsigned long tsize,unsigned long dsize,
-                        unsigned long bsize,unsigned long syms,
-                        unsigned long entry,unsigned long trsize,
-                        unsigned long drsize,int be)
+static void aout_header(FILE *f,uint32_t mag,uint32_t flag,
+                        uint32_t tsize,uint32_t dsize,uint32_t bsize,
+                        uint32_t syms,uint32_t entry,
+                        uint32_t trsize,uint32_t drsize,int be)
 /* write an a.out header */
 {
   struct aout_hdr h;
@@ -450,13 +499,9 @@ static void aout_writesection(FILE *f,section *sec,taddr sec_align)
   if (sec) {
     atom *a;
     taddr pc=0,npc;
-    int align,i;
 
     for (a=sec->first; a; a=a->next) {
-      align = a->align;
-      npc = ((pc + align-1) / align) * align;
-      for (i=pc; i<npc; i++)
-        fw8(f,0);
+      npc = fwpcalign(f,a,sec,pc);
       if (a->type == DATA)
         fwdata(f,a->content.db->data,a->content.db->size);
       else if (a->type == SPACE)
@@ -465,6 +510,30 @@ static void aout_writesection(FILE *f,section *sec,taddr sec_align)
     }
     fwalign(f,pc,sec_align);
   }
+}
+
+
+static void aout_writeorg(FILE *f,section *sec,taddr sec_align)
+/* write all absolute ORG-sections appended to .text */
+{
+  taddr pc = get_sec_size(sections[_TEXT]);
+  taddr npc;
+  atom *a;
+
+  for (; sec; sec=sec->next) {
+    if (sec->flags & ABSOLUTE) {
+      fwalign(f,pc,sec->align);
+      for (a=sec->first; a; a=a->next) {
+        npc = fwpcalign(f,a,sec,pc);
+        if (a->type == DATA)
+          fwdata(f,a->content.db->data,a->content.db->size);
+        else if (a->type == SPACE)
+          fwsblock(f,a->content.sb);
+        pc = npc + atom_size(a,sec,npc);
+      }
+    }
+  }
+  fwalign(f,pc,sec_align);
 }
 
 
@@ -501,14 +570,14 @@ void aout_writestrings(FILE *f,int be)
 static void write_output(FILE *f,section *sec,symbol *sym)
 {
   int be = BIGENDIAN;
-  unsigned long trsize,drsize;
+  uint32_t trsize,drsize;
 
   aout_initwrite(sec);
   aout_addsymlist(sym,BIND_GLOBAL,0,be);
   aout_addsymlist(sym,BIND_WEAK,0,be);
   if (!no_symbols) {
     aout_addsymlist(sym,BIND_LOCAL,0,be);
-    /* @@@ stabs??? aout_debugsyms(???,be); */
+    aout_debugsyms(be);
   }
   trsize = aout_addrelocs(be,_TEXT,&treloclist,aoutstd_getrinfo);
   drsize = aout_addrelocs(be,_DATA,&dreloclist,aoutstd_getrinfo);
@@ -519,7 +588,8 @@ static void write_output(FILE *f,section *sec,symbol *sym)
               secsize[_BSS],
               aoutsymlist.nextindex * sizeof(struct nlist32),
               0,trsize,drsize,be);
-  aout_writesection(f,sections[_TEXT],SECT_ALIGN);
+  aout_writesection(f,sections[_TEXT],0);
+  aout_writeorg(f,sec,SECT_ALIGN);
   aout_writesection(f,sections[_DATA],SECT_ALIGN);
   aout_writerelocs(f,&treloclist);
   aout_writerelocs(f,&dreloclist);

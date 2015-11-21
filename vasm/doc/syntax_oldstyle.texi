@@ -1,10 +1,10 @@
 This chapter describes the oldstyle syntax module suitable
-for some 8-bit CPUs (6502, 680x, Z80, etc.),
+for some 8-bit CPUs (6502, 680x, 68HC1x, Z80, etc.),
 which is available with the extension @code{oldstyle}.
 
 @section Legal
 
-    This module is copyright in 2002-2013 by Frank Wille.
+    This module is copyright in 2002-2015 by Frank Wille.
 
     This archive may be redistributed without modifications and used
     for non-commercial purposes.
@@ -66,6 +66,10 @@ Numbers starting with @code{@@} are assumed to be octal numbers, e.g.
 @code{@@237} (except for Z80, where it means binary).
 A special case is a digit followed by a @code{#}, which can be used to
 define an arbitrary base between 2 and 9 (e.g. @code{4#3012}).
+Intel-style constant suffixes are supported: @code{h} for hexadecimal,
+@code{d} for decimal, @code{o} or @code{q} for octal and @code{b} for
+binary. Hexadecimal intel-style constants must start with a digit (prepend
+@code{0}, when required).
 Also C-style prefixes are supported for hexadecimal (@code{0x}) and
 binary (@code{0b}).
 All other numbers starting with a digit are decimal, e.g. @code{1239}.
@@ -119,6 +123,9 @@ CPU- and output-module allow it):
 @item blkw <exp>[,<fill>]
       Insert <exp> zero or <fill> 16-bit words into the current section,
       using the endianess of the target CPU.
+
+@item bsz exp>[,<fill>]
+      Equivalent to @code{blk <exp>[,<fill>]}.
 
 @item byt
       Increases the program counter by one.
@@ -241,11 +248,20 @@ CPU- and output-module allow it):
       Aligns to an even address. Equivalent to @code{align 1}.
 
 @item fail <message>
-      Immediately break assembly with a fatal error, showing the <message>
-      from the operand field.
+      Show an error message including the <message> string. Do not generate
+      an ouput file.
 
 @item fill <exp>
       Equivalent to @code{blk <exp>,0}.
+
+@item fcb <exp1>[,<exp2>,"<string1>"...]
+      Equivalent to @code{byte <exp1>[,<exp2>,"<string1>"...]}.
+
+@item fcc "<string>"
+      Equivalent to @code{text}.
+
+@item fdb <exp1>[,<exp2>,"<string1>"...]
+      Equivalent to @code{word <exp1>[,<exp2>...]}.
 
 @item global <symbol>[,<symbol>...]
       Flag <symbol> as an external symbol, which means that <symbol> is
@@ -259,6 +275,12 @@ CPU- and output-module allow it):
       Conditionally assemble the following lines if <symbol> is defined.
 
 @item ifndef <symbol>
+      Conditionally assemble the following lines if <symbol> is undefined.
+
+@item ifd <symbol>
+      Conditionally assemble the following lines if <symbol> is defined.
+
+@item ifnd <symbol>
       Conditionally assemble the following lines if <symbol> is undefined.
 
 @item ifeq <expression>
@@ -324,7 +346,7 @@ CPU- and output-module allow it):
 
 @item macro <name>[,<argname>...]
       Defines a macro which can be referenced by <name>. The <name>
-      may also appear at the left side of the @code{macro} directive,
+      may also appear on the left side of the @code{macro} directive,
       starting at the first column. The macro definition is closed
       by an @code{endm} directive. When calling a macro you may pass
       up to 9 arguments, separated by comma. Those arguments are
@@ -427,7 +449,7 @@ CPU- and output-module allow it):
       Equivalent to @code{blk <exp>,0}.
 
 @item string "<string1>"[,"<string2>"...]
-      Like @code{string}, but adds a terminating zero-byte.
+      Like @code{text}, but adds a terminating zero-byte.
 
 @item struct <name>
       Defines a structure which can be referenced by <name>. Labels within
@@ -437,14 +459,15 @@ CPU- and output-module allow it):
       be ignored when such a structure is used. Data definitions can be used as
       default values when the structure is used as initializer. The structure
       name, <name>, is defined as a global symbol with the structure's size.
-      A structure definition is ended by @{endstruct}.
+      A structure definition is ended by @code{endstruct}.
 
 @item structure <name>
       Equivalent to @code{struct <name>}.
 
-@item text "string"
+@item text "<string>"
       Places a single string constant operands into successive bytes of
-      memory in the current section.
+      memory in the current section. The string delimiters may be any
+      printable ASCII character.
 
 @item weak <symbol>[,<symbol>...]
       Flag <symbol> as a weak symbol, which means that <symbol> is
@@ -564,20 +587,12 @@ This module has the following error messages:
 @item 1009: invalid data operand
 @item 1010: , expected
 @item 1011: identifier expected
-@item 1012: illegal escape sequence \%c
-@item 1013: expression must be a constant
-@item 1014: repeatedly defined symbol
-@item 1015: endif without if
-@item 1016: if without endif
-@item 1017: maximum if-nesting depth exceeded (%d levels)
-@item 1018: else without if
-@item 1019: unexpected endr without macro
-@item 1020: unexpected endr without rept
+@item 1012: illegal escape sequence %c
+@item 1013: unexpected "%s" without "%s"
 @item 1021: cannot open binary file "%s"
-@item 1022: symbol <%s> already defined with %s scope
 @item 1023: alignment too big
-@item 1024: label <%s> had already been defined
+@item 1024: label <%s> has already been defined
 @item 1025: skipping instruction in struct init
-@item 1026: last %d bytes of string constant had been cut
+@item 1026: last %d bytes of string constant have been cut
 
 @end itemize

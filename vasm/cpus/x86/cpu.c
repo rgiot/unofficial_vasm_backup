@@ -1,6 +1,6 @@
 /*
 ** cpu.c x86 cpu-description file
-** (c) in 2005-2006,2011 by Frank Wille
+** (c) in 2005-2006,2011,2015 by Frank Wille
 */
 
 #include "vasm.h"
@@ -10,7 +10,7 @@ mnemonic mnemonics[] = {
 };
 int mnemonic_cnt = sizeof(mnemonics)/sizeof(mnemonics[0]);
 
-char *cpu_copyright = "vasm x86 cpu backend 0.6 (c) 2005-2006,2011 Frank Wille";
+char *cpu_copyright = "vasm x86 cpu backend 0.6a (c) 2005-2006,2011,2015 Frank Wille";
 char *cpuname = "x86";
 int bitsperbyte = 8;
 int bytespertaddr = 4;
@@ -18,8 +18,6 @@ int bytespertaddr = 4;
 /* cpu options */
 uint32_t cpu_type = CPUAny | CPUNo64;
 static long cpudebug = 0;
-
-static hashtable *regsymhash;   /* hash-table for x86 register symbols */
 
 static regsym x86_regsyms[] = {
 #include "registers.h"
@@ -94,20 +92,6 @@ int x86_data_operand(int bits)
   }
   cpu_error(20,bits);  /* data objects with n bits size are not supported */
   return 0;
-}
-
-
-static int addregsym(regsym *rsym)
-/* add a new register symbol, return 0 if already exists */
-{
-  hashdata data;
-
-  if (find_name(regsymhash,rsym->reg_name,&data))
-    return 0;
-
-  data.ptr = rsym;
-  add_hashentry(regsymhash,rsym->reg_name,data);
-  return 1;
 }
 
 
@@ -708,7 +692,7 @@ static void optimize_jump(instruction *ip,operand *op,section *sec,
       general_error(38);  /* illegal relocation */
       return;
     }
-    label_in_sec = (base->type==LABSYM) && (base->sec==sec);
+    label_in_sec = LOCREF(base) && (base->sec==sec);
   }
   else
     label_in_sec = 0;
@@ -1127,10 +1111,10 @@ static int get_imm_bits(int t)
 }
 
 
-static int get_opcode_size(instruction *ip)
+static size_t get_opcode_size(instruction *ip)
 {
   uint32_t c = ip->ext.base_opcode;
-  int size = 1;
+  size_t size = 1;
 
   if (c > 0xff)
     size++;
@@ -1141,9 +1125,9 @@ static int get_opcode_size(instruction *ip)
 }  
 
 
-static int imm_size(int t)
+static size_t imm_size(int t)
 {
-  int size = 0;
+  size_t size = 0;
 
   if (t & Imm) {
     if (t & (Imm8|Imm8S))
@@ -1159,9 +1143,9 @@ static int imm_size(int t)
 }
 
 
-static int disp_size(int t)
+static size_t disp_size(int t)
 {
-  int size = 0;
+  size_t size = 0;
 
   if (t & Disp) {
     if (t & Disp8)
@@ -1177,13 +1161,14 @@ static int disp_size(int t)
 }
 
 
-static int finalize_instruction(instruction *ip,section *sec,
-                                taddr pc,int final)
+static size_t finalize_instruction(instruction *ip,section *sec,
+                                   taddr pc,int final)
 /* execute optimizations, calculate instruction opcode, opcode-extension,
    modrm- and sib-bytes, and return its size in bytes */
 {
   mnemonic *mnemo = &mnemonics[ip->code];
-  int size,i;
+  size_t size;
+  int i;
 
   for (i=0; i<MAX_OPERANDS; i++) {
     if (ip->op[i]) {
@@ -1238,7 +1223,7 @@ static int finalize_instruction(instruction *ip,section *sec,
 
   /* determine size of instruction */
   size = get_opcode_size(ip);
-  size += (int)ip->ext.num_prefixes;
+  size += ip->ext.num_prefixes;
   if (ip->ext.flags & MODRM_BYTE)
     size++;
   if (ip->ext.flags & SIB_BYTE)
@@ -1253,7 +1238,7 @@ static int finalize_instruction(instruction *ip,section *sec,
   }
 
   if (cpudebug & 16)
-    printf("%08lx: (%d) %s",(unsigned long)pc,size,mnemo->name);
+    printf("%08lx: (%u) %s",(unsigned long)pc,(unsigned)size,mnemo->name);
 
   return size;
 }
@@ -1267,7 +1252,7 @@ static unsigned char make_byte233(unsigned char b76,unsigned char b543,
 }
 
 
-static unsigned char *write_taddr(unsigned char *d,taddr val,int bits)
+static unsigned char *write_taddr(unsigned char *d,taddr val,size_t bits)
 {
   switch (bits) {
     case 8:
@@ -1322,7 +1307,8 @@ static unsigned char *output_opcodes(unsigned char *d,instruction *ip)
 static unsigned char *output_disp(dblock *db,unsigned char *d,
                                   instruction *ip,section *sec,taddr pc)
 {
-  int i,bits;
+  int i;
+  size_t bits;
   operand *op;
   taddr val;
 
@@ -1339,7 +1325,7 @@ static unsigned char *output_disp(dblock *db,unsigned char *d,
             if ((mnemo->ext.opcode_modifier & (Jmp|JmpByte|JmpDword))
                 || (op->flags & OPER_PCREL)) {
               /* handle pc-relative displacement for jumps */
-              if (base->type==LABSYM && base->sec==sec) {
+              if (!is_pc_reloc(base,sec)) {
                 val = val - (pc + (d-(unsigned char *)db->data) + (bits>>3));
               }
               else {
@@ -1368,7 +1354,8 @@ static unsigned char *output_disp(dblock *db,unsigned char *d,
 static unsigned char *output_imm(dblock *db,unsigned char *d,
                                  instruction *ip,section *sec,taddr pc)
 {
-  int i,bits,ot;
+  int i,ot;
+  size_t bits;
   operand *op;
   taddr val;
 
@@ -1547,8 +1534,8 @@ int set_default_qualifiers(char **q,int *q_len)
 static regsym *parse_reg(char **pp)
 /* parse a register name, return pointer to regsym when successful */
 {
-  hashdata data;
   char *p,*start;
+  regsym *r;
 
   p = skip(*pp);
   if (*p++ == '%') {
@@ -1563,9 +1550,7 @@ static regsym *parse_reg(char **pp)
         if (isdigit((unsigned char)*(p+1)) && *(p+2)==')')
           p += 3;
       }
-      if (find_namelen_nc(regsymhash,start,p-start,&data)) {
-        regsym *r = data.ptr;
-
+      if (r = find_regsym_nc(start,p-start)) {
         if ((r->reg_flags & (RegRex64|RegRex)) && mode_flag!=CODE_64BIT)
           return NULL;
         *pp = p;
@@ -1732,12 +1717,13 @@ void init_instruction_ext(instruction_ext *ixp)
 }
 
 
-taddr instruction_size(instruction *realip,section *sec,taddr pc)
+size_t instruction_size(instruction *realip,section *sec,taddr pc)
 /* Calculate the size of the current instruction; must be identical
    to the data created by eval_instruction. */
 {
   mnemonic *mnemo = &mnemonics[realip->code];
-  int i,size,diff;
+  int i,diff;
+  size_t size;
 
   /* assign the suffix, which was unknown during operand evaluation */
   if (!(realip->ext.flags & SUFFIX_CHECKED)) {
@@ -1772,7 +1758,7 @@ taddr instruction_size(instruction *realip,section *sec,taddr pc)
   /* work on a copy of the current instruction and finalize it */
   size = finalize_instruction(copy_instruction(realip),sec,pc,0);
 
-  if (realip->ext.last_size>=0 && (diff = realip->ext.last_size - size)!=0) {
+  if (realip->ext.last_size>=0 && (diff=realip->ext.last_size-(int)size)!=0) {
     if (diff > 0) {
       if (cpudebug & 16)
         printf(" (%d bytes gained)\n",diff);
@@ -1818,7 +1804,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 }
 
 
-dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
+dblock *eval_data(operand *op,size_t bitsize,section *sec,taddr pc)
 /* Create a dblock (with relocs, if necessary) for size bits of data. */
 {
   dblock *db = new_dblock();
@@ -1832,9 +1818,10 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
     
     btype = find_base(op->value,&base,sec,pc);
     if (base)
-      add_nreloc(&db->relocs,base,val,bitsize,
-                 btype==BASE_PCREL?REL_PC:REL_ABS,0);
-    else
+      add_nreloc(&db->relocs,base,val,
+                 btype==BASE_PCREL?REL_PC:REL_ABS,
+                 bitsize,0);
+    else if (btype != BASE_NONE)
       general_error(38);  /* illegal relocation */
   }
   write_taddr(db->data,val,bitsize);
@@ -1883,10 +1870,9 @@ int init_cpu()
       OC_JMP_DISP = (unsigned char)mnemonics[i].ext.base_opcode;
   }
 
-  /* define register symbols */
-  regsymhash = new_hashtable(REGSYMHTSIZE);
+  /* define all register symbols */
   for (r=x86_regsyms; r->reg_name!=NULL; r++)
-    addregsym(r);
+    add_regsym(r);
 
   return 1;
 }

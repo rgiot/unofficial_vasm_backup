@@ -1,5 +1,5 @@
 /* syntax.c  syntax module for vasm */
-/* (c) in 2002-2013 by Frank Wille */
+/* (c) in 2002-2015 by Frank Wille */
 
 #include "vasm.h"
 
@@ -12,7 +12,8 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm oldstyle syntax module 0.11 (c) 2002-2013 Frank Wille";
+char *syntax_copyright="vasm oldstyle syntax module 0.12c (c) 2002-2015 Frank Wille";
+hashtable *dirhash;
 
 static char textname[]=".text",textattr[]="acrx";
 static char dataname[]=".data",dataattr[]="adrw";
@@ -22,6 +23,12 @@ static char bssname[]=".bss",bssattr[]="aurw";
 char commentchar=';';
 char *defsectname = textname;
 char *defsecttype = "acrwx";
+
+static char macname[] = ".mac";
+static char macroname[] = ".macro";
+static char eqname[] = ".eq";
+static char equname[] = ".equ";
+static char setname[] = ".set";
 
 static char endmname[] = ".endmacro";
 static char endrname[] = ".endrepeat";
@@ -46,16 +53,9 @@ static struct namelen dendr_dirlist[] = {
   { 5,&endrname[0] }, { 7,&endrname[0] }, { 10,&endrname[0] }, { 0,0 }
 };
 
-static int dotdirectives = 0;
+static int dotdirs = 0;
 static int autoexport = 0;
-static hashtable *dirhash;
 static int parse_end = 0;
-
-#define MAXCONDLEV 63
-static char cond[MAXCONDLEV+1];
-static int clev,ifnesting;
-
-#define LOCAL (RSRVD_S<<0)      /* symbol flag for local binding */
 
 
 char *skip(char *s)
@@ -75,28 +75,64 @@ void eol(char *s)
 }
 
 
-char *skip_operand(char *s)
+static char *skip_oper(int instoper,char *s)
 {
   int par_cnt = 0;
-  char c;
+  char c = 0;
+#ifdef VASM_CPU_Z80
+  unsigned char lastuc;
+#endif
 
   for (;;) {
+#ifdef VASM_CPU_Z80
+    lastuc = toupper((unsigned char)c);
+#endif
     c = *s;
+
     if (START_PARENTH(c))
       par_cnt++;
-    if (END_PARENTH(c)) {
+    else if (END_PARENTH(c)) {
       if (par_cnt>0)
         par_cnt--;
       else
         syntax_error(3);  /* too many closing parentheses */
     }
-    if(!c || c==commentchar || (c==',' && par_cnt==0))
+#ifdef VASM_CPU_Z80
+    /* For the Z80 ignore ' behind a letter, as it may be a register */
+    else if ((c=='\'' && (lastuc<'A' || lastuc>'Z')) || c=='\"')
+#else
+    else if (c=='\'' || c=='\"')
+#endif
+      s = skip_string(s,c,NULL) - 1;
+    else if(!c || c==commentchar)
       break;
+    else if (instoper && OPERSEP_COMMA && c==',' && par_cnt==0)
+      break;
+    else if (instoper && OPERSEP_BLANK && isspace((unsigned char)c)
+             && par_cnt==0)
+      break;
+    else if (!instoper && c==',' && par_cnt==0)
+      break;
+
     s++;
   }
   if(par_cnt != 0)
     syntax_error(4);  /* missing closing parentheses */
   return s;
+}
+
+
+char *skip_operand(char *s)
+{
+  return skip_oper(1,s);
+}
+
+
+char *my_skip_macro_arg(char *s)
+{
+  if (*s == '\\')
+    s++;  /* leading \ in argument list is optional */
+  return skip_identifier(s);
 }
 
 
@@ -111,24 +147,28 @@ static void handle_data_offset(char *s,int size,int offset)
 
     if (size==8 && (*s=='\"' || *s=='\'')) {
       if (db = parse_string(&opstart,*s,8)) {
+#if defined(VASM_CPU_650X) || defined(VASM_CPU_Z80) || defined(VASM_CPU_6800)
         if (offset != 0) {
           int i;
 
           for (i=0; i<db->size; i++)
             db->data[i] = db->data[i] + offset;
         }
+#endif
         add_atom(0,new_data_atom(db,1));
         s = opstart;
       }
     }
     if (!db) {
       op = new_operand();
-      s = skip_operand(s);
+      s = skip_oper(0,s);
       if (parse_operand(opstart,s-opstart,op,DATA_OPERAND(size))) {
         atom *a;
 
+#if defined(VASM_CPU_650X) || defined(VASM_CPU_Z80) || defined(VASM_CPU_6800)
         if (offset != 0)
           op->value = make_expr(ADD,number_expr(offset),op->value);
+#endif
         a = new_datadef_atom(abs(size),op);
         a->align = 1;
         add_atom(0,a);
@@ -168,7 +208,7 @@ static void handle_text(char *s)
   }
   if (!db) {
     op = new_operand();
-    s = skip_operand(s);
+    s = skip_oper(0,s);
     if (parse_operand(opstart,s-opstart,op,DATA_OPERAND(8))) {
       atom *a;
 
@@ -207,6 +247,7 @@ static void handle_d32(char *s)
 }
 
 
+#if defined(VASM_CPU_650X) || defined(VASM_CPU_Z80) || defined(VASM_CPU_6800)
 static void handle_d8_offset(char *s)
 {
   taddr offs = parse_constexpr(&s);
@@ -219,6 +260,7 @@ static void handle_d8_offset(char *s)
   else
     syntax_error(9);  /* , expected */
 }
+#endif
 
 
 static void do_alignment(taddr align,expr *offset)
@@ -325,7 +367,7 @@ static void handle_end(char *s)
 
 static void handle_fail(char *s)
 {
-  fail(s);
+  add_atom(0,new_assert_atom(NULL,NULL,mystrdup(s)));
 }
 
 
@@ -339,22 +381,22 @@ static void handle_org(char *s)
       return;
     }
   }
-  new_org(parse_constexpr(&s));
+  set_section(new_org(parse_constexpr(&s)));
   eol(s);
 }
 
 
 static void handle_rorg(char *s)
 {
-  add_atom(0,new_rorg_atom(parse_constexpr(&s)));
+  start_rorg(parse_constexpr(&s));
   eol(s);
 }
   
 
 static void handle_rend(char *s)
 {
-  add_atom(0,new_rorgend_atom());
-  eol(s);
+  if (end_rorg())
+    eol(s);
 }
   
 
@@ -391,18 +433,6 @@ static void handle_section(char *s)
 }
 
 
-static char *get_bind_name(symbol *s)
-{
-  if (s->flags&EXPORT)
-    return "global";
-  else if(s->flags&WEAK)
-    return "weak";
-  else if(s->flags&LOCAL)
-    return "local";
-  return "unknown";
-}
-
-
 static void do_binding(char *s,int bind)
 {
   symbol *sym;
@@ -415,7 +445,7 @@ static void do_binding(char *s,int bind)
     myfree(name);
     if (sym->flags&(EXPORT|WEAK|LOCAL)!=0 &&
         sym->flags&(EXPORT|WEAK|LOCAL)!=bind)
-      syntax_error(20,sym->name,get_bind_name(sym));  /* binding already set */
+      general_error(62,sym->name,get_bind_name(sym)); /* binding already set */
     else
       sym->flags |= bind;
     s = skip(s);
@@ -451,18 +481,16 @@ static void ifdef(char *s,int b)
   symbol *sym;
   int result;
 
-  if (!(name = get_local_label(&s))) {
-    if (!(name = parse_identifier(&s))) {
-      syntax_error(10);  /* identifier expected */
-      return;
-    }
+  if (!(name = parse_symbol(&s))) {
+    syntax_error(10);  /* identifier expected */
+    return;
   }
   if (sym = find_symbol(name))
     result = sym->type != IMPORT;
   else
     result = 0;
   myfree(name);
-  cond[++clev] = result == b;
+  cond_if(result == b);
   eol(s);
 }
 
@@ -490,7 +518,7 @@ static void ifused(char *s, int b)
     result = 0;
 
   myfree(name);
-  cond[++clev] = result == b;
+  cond_if(result == b);
   eol(s);
 }
 
@@ -537,10 +565,10 @@ static char *ifexp(char *s,int c)
     }
   }
   else {
-    syntax_error(12);  /* expression must be constant */
+    general_error(30);  /* expression must be constant */
     b = 0;
   }
-  cond[++clev] = b;
+  cond_if(b);
   free_expr(condexp);
   return s;
 }
@@ -585,20 +613,14 @@ static void handle_ifle(char *s)
 static void handle_else(char *s)
 {
   eol(s);
-  if (clev > 0)
-    cond[clev] = 0;
-  else
-    syntax_error(17);  /* else without if */
+  cond_skipelse();
 }
 
 
 static void handle_endif(char *s)
 {
   eol(s);
-  if (clev > 0)
-    clev--;
-  else
-    syntax_error(14);  /* endif without if */
+  cond_endif();
 }
 
 
@@ -677,14 +699,14 @@ static void handle_rept(char *s)
 
   eol(s);
   new_repeat((int)cnt,
-             dotdirectives?drept_dirlist:rept_dirlist,
-             dotdirectives?dendr_dirlist:endr_dirlist);
+             dotdirs?drept_dirlist:rept_dirlist,
+             dotdirs?dendr_dirlist:endr_dirlist);
 }
 
 
 static void handle_endr(char *s)
 {
-  syntax_error(19);  /* unexpected endr without rept */
+  syntax_error(12,&endrname[1],&repeatname[1]);  /* unexpected endr without rept */
 }
 
 
@@ -701,7 +723,7 @@ static void handle_macro(char *s)
       eol(s);
       s = NULL;
     }
-    new_macro(name,dotdirectives?dendm_dirlist:endm_dirlist,s);
+    new_macro(name,dotdirs?dendm_dirlist:endm_dirlist,s);
     myfree(name);
   }
   else
@@ -711,7 +733,7 @@ static void handle_macro(char *s)
 
 static void handle_endm(char *s)
 {
-  syntax_error(18);  /* unexpected endm without macro */
+  syntax_error(12,&endmname[1],&macroname[1]);  /* unexpected endm without macro */
 }
 
 
@@ -773,7 +795,7 @@ static void handle_endstruct(char *s)
     szlabel = new_labsym(0,current_section->name);
     add_atom(0,new_label_atom(szlabel));
     /* end structure declaration by switching to previous section */
-    current_section = prevsec;
+    set_section(prevsec);
   }
   eol(s);
 }
@@ -804,7 +826,10 @@ struct {
   "dw",handle_d16,
   "dfw",handle_d16,
   "defw",handle_d16,
+  "dd",handle_d32,
+#if defined(VASM_CPU_650X) || defined(VASM_CPU_Z80) || defined(VASM_CPU_6800)
   "abyte",handle_d8_offset,
+#endif
   "ds",handle_spc8,
   "dsb",handle_spc8,
   "fill",handle_spc8,
@@ -817,9 +842,22 @@ struct {
   "byt",handle_fixedspc1,
   "wrd",handle_fixedspc2,
   "assert",handle_assert,
+#if defined(VASM_CPU_TR3200) /* Clash with IFxx instructions of TR3200 cpu */
+  "if_def",handle_ifd,
+  "if_ndef",handle_ifnd,
+  "if_eq",handle_ifeq,
+  "if_ne",handle_ifne,
+  "if_gt",handle_ifgt,
+  "if_ge",handle_ifge,
+  "if_lt",handle_iflt,
+  "if_le",handle_ifle,
+  "if_used",handle_ifused,
+  "if_nused",handle_ifnused,
+#else
   "ifdef",handle_ifd,
   "ifndef",handle_ifnd,
-  "if",handle_ifne,
+  "ifd",handle_ifd,
+  "ifnd",handle_ifnd,
   "ifeq",handle_ifeq,
   "ifne",handle_ifne,
   "ifgt",handle_ifgt,
@@ -828,10 +866,12 @@ struct {
   "ifle",handle_ifle,
   "ifused",handle_ifused,
   "ifnused",handle_ifnused,
+#endif
+  "if",handle_ifne,
   "else",handle_else,
   "el",handle_else,
   "endif",handle_endif,
-#if !defined(VASM_CPU_Z80)
+#if !defined(VASM_CPU_Z80) && !defined(VASM_CPU_6800)
   "ei",handle_endif,  /* Clashes with z80 opcode */
 #endif
   "incbin",handle_incbin,
@@ -873,6 +913,12 @@ struct {
   "structure",handle_struct,
   "endstruct",handle_endstruct,
   "endstructure",handle_endstruct,
+  "rmb",handle_spc8,
+  "fcc",handle_text,
+  "fcb",handle_d8,
+  "fdb",handle_d16,
+  "bsz",handle_spc8,
+  "zmb",handle_spc8,
 };
 
 int dir_cnt = sizeof(directives) / sizeof(directives[0]);
@@ -890,7 +936,7 @@ static int check_directive(char **line)
   name = s++;
   while (ISIDCHAR(*s))
     s++;
-  if (*name=='.' && dotdirectives)
+  if (*name=='.' && dotdirs)
     name++;
   if (!find_namelen_nc(dirhash,name,s-name,&data))
     return -1;
@@ -939,7 +985,7 @@ static int execute_struct(char *name,int name_len,char *s)
 
     if (p->type==DATA || p->type==SPACE || p->type==DATADEF) {
       opp = s = skip(s);
-      s = skip_operand(s);
+      s = skip_oper(0,s);
       opl = oplen(s,opp);
 
       if (opl > 0) {
@@ -1023,6 +1069,22 @@ static int execute_struct(char *name,int name_len,char *s)
 }
 
 
+static char *parse_label_or_pc(char **start)
+{
+  char *s,*name;
+
+  name = parse_labeldef(start,0);
+  s = skip(*start);
+  if (name==NULL && *s==current_pc_char && !ISIDCHAR(*(s+1))) {
+    name = cnvstr(s,1);
+    s = skip(s+2);
+  }
+  if (name)
+    *start = s;
+  return name;
+}
+
+
 void parse(void)
 {
   char *s,*line,*inst,*labname;
@@ -1030,69 +1092,44 @@ void parse(void)
   char *op[MAX_OPERANDS];
   int ext_len[MAX_QUALIFIERS?MAX_QUALIFIERS:1];
   int op_len[MAX_OPERANDS];
-  int glob,ext_cnt,op_cnt,inst_len;
+  int ext_cnt,op_cnt,inst_len;
   instruction *ip;
 
   while (line = read_next_line()) {
     if (parse_end)
       continue;
-    if (clev >= MAXCONDLEV)
-      syntax_error(16,clev);  /* nesting depth exceeded */
 
-    if (!cond[clev]) {
+    if (!cond_state()) {
       /* skip source until ELSE or ENDIF */
       int idx;
 
       s = line;
+      if (labname = parse_label_or_pc(&s))
+        myfree(labname);
       idx = check_directive(&s);
       if (idx >= 0) {
-        if (!strncmp(directives[idx].name,"if",2)) {
-          ifnesting++;
-        }
-        else if (ifnesting==0 && directives[idx].func == handle_else) {
-          cond[clev] = 1;
-        }
-        else if (directives[idx].func == handle_endif) {
-          if (ifnesting == 0) {
-            if (clev > 0)
-              clev--;
-            else
-              syntax_error(14);  /* endif without if */
-          }
-          else
-            ifnesting--;
-        }
+        if (!strncmp(directives[idx].name,"if",2))
+          cond_skipif();
+        else if (directives[idx].func == handle_else)
+          cond_else();
+        else if (directives[idx].func == handle_endif)
+          cond_endif();
       }
       continue;
     }
 
     s = line;
-
-    glob = 0;
-    labname = get_local_label(&s); /* local label? */
-
-    if (!labname && (ISIDSTART(*s) || *s==current_pc_char)) { /* global l.? */
-      s++;
-      while (ISIDCHAR(*s))
-        s++;
-      if (*line==current_pc_char && s-line!=1) {
-        syntax_error(10);  /* identifier expected */
-        continue;
-      }
-      labname = cnvstr(line,s-line);
-      s = skip(s);
-      glob = 1;
-    }
-
-    if (labname) {
-      /* we have found a global or local label at first column */
+    if (labname = parse_label_or_pc(&s)) {
+      /* we have found a global or local label, or current-pc character */
       symbol *label,*labsym;
       int equlen = 0;
 
-      if (!strnicmp(s,"equ",3) && isspace((unsigned char)*(s+3)))
-        equlen = 3;
-      else if (!strnicmp(s,"eq",2) && isspace((unsigned char)*(s+2)))
-        equlen = 2;
+      if (!strnicmp(s,equname+!dotdirs,3+dotdirs) &&
+          isspace((unsigned char)*(s+3+dotdirs)))
+        equlen = 3+dotdirs;
+      else if (!strnicmp(s,eqname+!dotdirs,2+dotdirs) &&
+               isspace((unsigned char)*(s+2+dotdirs)))
+        equlen = 2+dotdirs;
       else if (*s == '=')
         equlen = 1;
 
@@ -1103,35 +1140,34 @@ void parse(void)
           continue;
         }
         else {
-          if (labsym = find_symbol(labname)) {
-            if (labsym->type != IMPORT)
-              syntax_error(13);  /* repeatedly defined symbol */
-          }
           s = skip(s+equlen);
-          label = new_abs(labname,parse_expr_tmplab(&s));
+          label = new_equate(labname,parse_expr_tmplab(&s));
         }
       }
-      else if (!strnicmp(s,"set",3) && isspace((unsigned char)*(s+3))) {
+      else if (!strnicmp(s,setname+!dotdirs,3+dotdirs) &&
+               isspace((unsigned char)*(s+3+dotdirs))) {
         /* SET allows redefinitions */
         if (*labname == current_pc_char) {
           syntax_error(10);  /* identifier expected */
         }
         else {
-          s = skip(s+3);
+          s = skip(s+3+dotdirs);
           label = new_abs(labname,parse_expr_tmplab(&s));
         }
       }
-      else if (!strnicmp(s,"mac",3) &&
-               (isspace((unsigned char)*(s+3)) || *(s+3)=='\0') ||
-               !strnicmp(s,"macro",5) &&
-               (isspace((unsigned char)*(s+5)) || *(s+5)=='\0')) {
-        char *params = skip(s + (*(s+3)=='r'?5:3));
+      else if (!strnicmp(s,macname+!dotdirs,3+dotdirs) &&
+               (isspace((unsigned char)*(s+3+dotdirs)) ||
+                *(s+3+dotdirs)=='\0') ||
+               !strnicmp(s,macroname+!dotdirs,5+dotdirs) &&
+               (isspace((unsigned char)*(s+5+dotdirs)) ||
+                *(s+5+dotdirs)=='\0')) {
+        char *params = skip(s + (*(s+3+dotdirs)=='r'?5+dotdirs:3+dotdirs));
 
         s = line;
         myfree(labname);
         if (!(labname = parse_identifier(&s)))
           ierror(0);
-        new_macro(labname,dotdirectives?dendm_dirlist:endm_dirlist,params);
+        new_macro(labname,dotdirs?dendm_dirlist:endm_dirlist,params);
         myfree(labname);
         continue;
       }
@@ -1142,10 +1178,10 @@ void parse(void)
         if (*s == ':')	/* optionally terminated by a colon */
           s = skip(s+1);
       }
-      myfree(labname);
 
-      if (glob && autoexport)
+      if (!is_local_label(labname) && autoexport)
           label->flags |= EXPORT;
+      myfree(labname);
     }
 
     /* check for directives first */
@@ -1154,7 +1190,7 @@ void parse(void)
       continue;
 
     s = parse_cpu_special(s);
-    if (*s=='\0' || *s==commentchar)
+    if (ISEOL(s))
       continue;
 
     if (*s==current_pc_char && *(s+1)=='=') {   /* "*=" org directive */ 
@@ -1165,7 +1201,7 @@ void parse(void)
       continue;
 
     s = skip(s);
-    if (*s=='\0' || *s==commentchar)
+    if (ISEOL(s))
       continue;
 
     /* read mnemonic name */
@@ -1186,16 +1222,16 @@ void parse(void)
       syntax_error(2);  /* no space before operands */
     s = skip(s);
 
-    if (execute_macro(inst,inst_len,ext,ext_len,ext_cnt,s,clev))
+    if (execute_macro(inst,inst_len,ext,ext_len,ext_cnt,s))
       continue;
     if (execute_struct(inst,inst_len,s))
       continue;
 
-    /* read operands, terminated by comma (unless in parentheses)  */
+    /* read operands, terminated by comma or blank (unless in parentheses) */
     op_cnt = 0;
-    while (*s && *s!=commentchar && op_cnt<MAX_OPERANDS) {
+    while (!ISEOL(s) && op_cnt<MAX_OPERANDS) {
       op[op_cnt] = s;
-      s = skip_operand(s);
+      s = skip_oper(1,s);
       op_len[op_cnt] = oplen(s,op[op_cnt]);
 #if !ALLOW_EMPTY_OPS
       if (op_len[op_cnt] <= 0)
@@ -1204,13 +1240,15 @@ void parse(void)
 #endif
         op_cnt++;
       s = skip(s);
-      if (*s != ',')
-        break;
-      else
-        s = skip(s+1);
+      if (OPERSEP_COMMA) {
+        if (*s == ',')
+          s = skip(s+1);
+        else if (!(OPERSEP_BLANK))
+          break;
+      }
     }      
     s = skip(s);
-    if (*s!='\0' && *s!=commentchar)
+    if (!ISEOL(s))
       syntax_error(6);
 
     ip = new_inst(inst,inst_len,op_cnt,op,op_len);
@@ -1230,14 +1268,133 @@ void parse(void)
       add_atom(0,new_inst_atom(ip));
   }
 
-  if (clev > 0)
-    syntax_error(15);  /* if without endif */
+  cond_check();
+}
+
+
+/* parse next macro argument */
+char *parse_macro_arg(struct macro *m,char *s,
+                      struct namelen *param,struct namelen *arg)
+{
+  arg->len = 0;  /* cannot select specific named arguments */
+  param->name = s;
+
+  if (*s=='\"' || *s=='\'') {
+    s = skip_string(s,*s,NULL);
+    param->len = s - param->name;
+  }
+  else {
+    s = skip_operand(s);
+    param->len = s - param->name;
+  }
+
+  return s;
+}
+
+
+/* expands arguments and special escape codes into macro context */
+int expand_macro(source *src,char **line,char *d,int dlen)
+{
+  int nc = -1;
+  int n;
+  char *s = *line;
+  char *end;
+
+  if (*s++ == '\\') {
+    /* possible macro expansion detected */
+
+    if (*s == '\\') {
+      *d++ = *s++;
+      if (esc_sequences) {
+        *d++ = '\\';  /* make it a double \ again */
+        nc = 2;
+      }
+      else
+        nc = 1;
+    }
+
+    else if (*s == '@') {
+      /* \@: insert a unique id */
+      char buf[16];
+
+      nc = sprintf(buf,"%lu",src->id);
+      if (dlen >= nc) {
+        s++;
+        memcpy(d,buf,nc);
+      }
+      else
+        nc = -1;
+    }
+    else if (*s=='(' && *(s+1)==')') {
+      /* \() is just skipped, useful to terminate named macro parameters */
+      nc = 0;
+      s += 2;
+    }
+    else if (isdigit((unsigned char)*s)) {
+      /* \1..\9,\0 : insert macro parameter 1..9,10 */
+      nc = copy_macro_param(src,*s=='0'?0:*s-'1',d,dlen);
+      s++;
+    }
+    else if ((end = skip_identifier(s)) != NULL) {
+      if ((n = find_macarg_name(src,s,end-s)) >= 0) {
+        /* \argname: insert named macro parameter n */
+        nc = copy_macro_param(src,n,d,dlen);
+        s = end;
+      }
+    }
+
+    if (nc >= 0)
+      *line = s;  /* update line pointer when expansion took place */
+  }
+
+  return nc;  /* number of chars written to line buffer, -1: no expansion */
+}
+
+
+static int intel_suffix(char *s)
+/* check for constants with h, d, o, q or b suffix */
+{
+  int base,lastbase;
+  char c;
+  
+  base = 2;
+  while (isxdigit((unsigned char)*s)) {
+    lastbase = base;
+    switch (base) {
+      case 2:
+        if (*s <= '1') break;
+        base = 8;
+      case 8:
+        if (*s <= '7') break;
+        base = 10;
+      case 10:
+        if (*s <= '9') break;
+        base = 16;
+    }
+    s++;
+  }
+
+  c = tolower((unsigned char)*s);
+  if (c == 'h')
+    return 16;
+  if ((c=='o' || c=='q') && base<=8)
+    return 8;
+
+  c = tolower((unsigned char)*(s-1));
+  if (c=='d' && lastbase<=10)
+    return 10;
+  if (c=='b' && lastbase<=2)
+    return 2;
+
+  return 0;
 }
 
 
 char *const_prefix(char *s,int *base)
 {
   if (isdigit((unsigned char)*s)) {
+    if (*base = intel_suffix(s))
+      return s;
     if (*s == '0') {
       if (s[1]=='x' || s[1]=='X'){
         *base = 16;
@@ -1250,7 +1407,7 @@ char *const_prefix(char *s,int *base)
       *base = 8;
       return s;
     } 
-    else if (*(s+1)=='#' && *s>='2') {
+    else if (s[1]=='#' && *s>='2' && *s<='9') {
       *base = *s & 0xf;
       return s+2;
     }
@@ -1284,6 +1441,15 @@ char *const_prefix(char *s,int *base)
   }
   *base = 0;
   return s;
+}
+
+
+char *const_suffix(char *start,char *end)
+{
+  if (intel_suffix(start))
+    return end+1;
+
+  return end;
 }
 
 
@@ -1345,15 +1511,8 @@ int init_syntax()
     data.idx = i;
     add_hashentry(dirhash,directives[i].name,data);
   }
-  
+  cond_init();
   current_pc_char = '*';
-  cond[0] = 1;
-  clev = ifnesting = 0;
-
-  /* Allow up to 36 named macro arguments. Enabling named arguments */
-  /* means that \a..\z are disabled. \1..\9 still work in parallel. */
-  namedmacparams = 1;
-  maxmacparams = 36;
   return 1;
 }
 
@@ -1361,7 +1520,7 @@ int init_syntax()
 int syntax_args(char *p)
 {
   if (!strcmp(p,"-dotdir")) {
-    dotdirectives = 1;
+    dotdirs = 1;
     return 1;
   }
   else if (!strcmp(p,"-autoexp")) {

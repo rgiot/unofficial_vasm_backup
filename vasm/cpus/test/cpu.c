@@ -139,7 +139,7 @@ static int opt_inst(instruction *p,section *sec,taddr pc)
   /* jmp->bra */
   if(p->code==6){
     expr *tree=p->op[0]->offset;
-    if(tree->type==SYM&&tree->c.sym->sec==sec&&tree->c.sym->type==LABSYM&&
+    if(tree->type==SYM&&tree->c.sym->sec==sec&&LOCREF(tree->c.sym)&&
        tree->c.sym->pc-pc>=-128&&tree->c.sym->pc-pc<=127)
       return 7;
   }
@@ -168,11 +168,10 @@ static char *fill_operand(operand *p,section *sec,taddr pc,char *d,rlist **reloc
   /* FIXME: Test for valid operand, create reloc */
   if(!eval_expr(p->offset,&val,sec,pc)){
     symbol *base;
-    if (find_base(p->offset,&base,sec,pc)!=BASE_OK){
+    if (find_base(p->offset,&base,sec,pc)!=BASE_OK)
       general_error(38);
-    }else{
-      add_nreloc(&db->relocs,base,0,REL_ABS,16,roffset*8);
-    }
+    else
+      add_nreloc(relocs,base,0,REL_ABS,16,roffset*8);
   }
   *d++=val>>24;
   *d++=val>>16;
@@ -186,7 +185,7 @@ static char *fill_operand(operand *p,section *sec,taddr pc,char *d,rlist **reloc
 dblock *eval_instruction(instruction *p,section *sec,taddr pc)
 {
   /* Auch simpel. Fehlerchecks fehlen. */
-  taddr size=instruction_size(p,sec,pc);
+  size_t size=instruction_size(p,sec,pc);
   dblock *db=new_dblock();
   int c=opt_inst(p,sec,pc);
   char *d;
@@ -213,7 +212,7 @@ dblock *eval_instruction(instruction *p,section *sec,taddr pc)
   }
   if(c==7){
     expr *tree=p->op[0]->offset;
-    if(!(tree->type==SYM&&tree->c.sym->sec==sec&&tree->c.sym->type==LABSYM&&
+    if(!(tree->type==SYM&&tree->c.sym->sec==sec&&LOCREF(tree->c.sym)&&
 	 tree->c.sym->pc-pc>=-128&&tree->c.sym->pc-pc<=127))
       cpu_error(0);
     else
@@ -229,7 +228,7 @@ dblock *eval_instruction(instruction *p,section *sec,taddr pc)
 }
 
 /* Create a dblock (with relocs, if necessary) for size bits of data. */
-dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
+dblock *eval_data(operand *op,size_t bitsize,section *sec,taddr pc)
 {
   dblock *new=new_dblock();
   taddr val;
@@ -264,7 +263,7 @@ static taddr opsize(operand *p)
 
 /* Calculate the size of the current instruction; must be identical
    to the data created by eval_instruction. */
-taddr instruction_size(instruction *p,section *sec,taddr pc)
+size_t instruction_size(instruction *p,section *sec,taddr pc)
 {
   int c;
   size_t size=2;

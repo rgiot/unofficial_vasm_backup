@@ -1,6 +1,6 @@
 /*
 ** cpu.c 650x/651x cpu-description file
-** (c) in 2002,2006,2008-2012 by Frank Wille
+** (c) in 2002,2006,2008-2012,2014-2015 by Frank Wille
 */
 
 #include "vasm.h"
@@ -11,7 +11,7 @@ mnemonic mnemonics[] = {
 
 int mnemonic_cnt=sizeof(mnemonics)/sizeof(mnemonics[0]);
 
-char *cpu_copyright="vasm 6502 cpu backend 0.6 (c) 2002,2006,2008-2012 Frank Wille";
+char *cpu_copyright="vasm 6502 cpu backend 0.7a (c) 2002,2006,2008-2012,2014-2015 Frank Wille";
 char *cpuname = "6502";
 int bitsperbyte = 8;
 int bytespertaddr = 2;
@@ -51,7 +51,6 @@ int ext_find_base(symbol **base,expr *p,section *sec,taddr pc)
     modifier = p->type;
     return find_base(p->left,base,sec,pc);
   }
-  modifier = 0;
   return BASE_ILLEGAL;
 }
 
@@ -74,8 +73,10 @@ int parse_operand(char *p,int len,operand *op,int required)
       p = skip(p);
       break;
     case INDIR:
+    case INDIRX:
     case INDX:
     case INDY:
+    case DPINDIR:
       if (!indir)
         return PO_NOMATCH;
       break;
@@ -92,6 +93,7 @@ int parse_operand(char *p,int len,operand *op,int required)
 
   switch (required) {
     case INDX:
+    case INDIRX:
       if (*p++ == ',') {
         p = skip(p);
         if (toupper((unsigned char)*p++) != 'X')
@@ -116,7 +118,8 @@ int parse_operand(char *p,int len,operand *op,int required)
       break;
   }
 
-  if (required==INDIR || required==INDX || required==INDY) {
+  if (required==INDIR || required==INDX || required==INDY
+      || required==DPINDIR || required==INDIRX) {
     p = skip(p);
     if (*p++ != ')') {
       cpu_error(2);  /* missing closing parenthesis */
@@ -176,7 +179,7 @@ static void optimize_instruction(instruction *ip,section *sec,
         symbol *base;
         
         if (find_base(op->value,&base,sec,pc) == BASE_OK) {
-          if (op->type==REL && base->type==LABSYM && base->sec==sec) {
+          if (op->type==REL && LOCREF(base) && base->sec==sec) {
             taddr bd = val - (pc + 2);
     
             if ((bd<-0x80 || bd>0x7f) && branchopt) {
@@ -191,7 +194,7 @@ static void optimize_instruction(instruction *ip,section *sec,
 }
 
 
-static taddr get_inst_size(instruction *ip)
+static size_t get_inst_size(instruction *ip)
 {
   if (ip->op[0] != NULL) {
     switch (ip->op[0]->type) {
@@ -201,6 +204,7 @@ static taddr get_inst_size(instruction *ip)
       case REL:
       case INDX:
       case INDY:
+      case DPINDIR:
       case IMMED:
       case ZPAGE:
       case ZPAGEX:
@@ -210,6 +214,7 @@ static taddr get_inst_size(instruction *ip)
       case ABSX:
       case ABSY:
       case INDIR:
+      case INDIRX:
         return 3;
       case RELJMP:
         return 5;
@@ -222,7 +227,7 @@ static taddr get_inst_size(instruction *ip)
 }
 
 
-taddr instruction_size(instruction *ip,section *sec,taddr pc)
+size_t instruction_size(instruction *ip,section *sec,taddr pc)
 {
   instruction *ipcopy;
 
@@ -259,6 +264,7 @@ static void rangecheck(taddr val,int type)
   switch (type) {
     case INDX:
     case INDY:
+    case DPINDIR:
     case ZPAGE:
     case ZPAGEX:
     case ZPAGEY:
@@ -294,7 +300,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
       if (!eval_expr(op->value,&val,sec,pc)) {
         modifier = 0;
         if (find_base(op->value,&base,sec,pc) == BASE_OK) {
-          if (optype==REL && base->type==LABSYM && base->sec==sec) {
+          if (optype==REL && !is_pc_reloc(base,sec)) {
             /* relative branch requires no relocation */
             val = val - (pc + 2);
           }
@@ -307,10 +313,12 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
               case ABSX:
               case ABSY:
               case INDIR:
+              case INDIRX:
                 size = 16;
                 break;
               case INDX:
               case INDY:
+              case DPINDIR:
               case ZPAGE:
               case ZPAGEX:
               case ZPAGEY:
@@ -332,11 +340,13 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
             rl = add_nreloc(&db->relocs,base,val,type,size,offs);
             switch (modifier) {
               case LOBYTE:
-                ((nreloc *)rl->reloc)->mask = 0xff;
+                if (rl)
+                  ((nreloc *)rl->reloc)->mask = 0xff;
                 val = val & 0xff;
                 break;
               case HIBYTE:
-                ((nreloc *)rl->reloc)->mask = 0xff00;
+                if (rl)
+                  ((nreloc *)rl->reloc)->mask = 0xff00;
                 val = (val >> 8) & 0xff;
                 break;
             }
@@ -364,6 +374,8 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
         cpu_error(5);   /* operand doesn't fit into 8-bits */
     case ABS:
     case INDIR:
+    case INDIRX:
+    case DPINDIR:
       *d++ = val & 0xff;
       *d = (val>>8) & 0xff;
       break;
@@ -388,7 +400,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 }
 
 
-dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
+dblock *eval_data(operand *op,size_t bitsize,section *sec,taddr pc)
 {
   dblock *db = new_dblock();
   taddr val;
@@ -410,16 +422,18 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
                       btype==BASE_PCREL?REL_PC:REL_ABS,bitsize,0);
       switch (modifier) {
         case LOBYTE:
-          ((nreloc *)rl->reloc)->mask = 0xff;
+          if (rl)
+            ((nreloc *)rl->reloc)->mask = 0xff;
           val = val & 0xff;
           break;
         case HIBYTE:
-          ((nreloc *)rl->reloc)->mask = 0xff00;
+          if (rl)
+            ((nreloc *)rl->reloc)->mask = 0xff00;
           val = (val >> 8) & 0xff;
           break;
       }
     }
-    else
+    else if (btype != BASE_NONE)
       general_error(38);  /* illegal relocation */
   }
   if (bitsize < 16) {
@@ -470,6 +484,8 @@ int cpu_args(char *p)
     cpu_type |= ILL;
   else if (!strcmp(p,"-dtv"))
     cpu_type |= DTV;
+  else if (!strcmp(p,"-c02"))
+    cpu_type = M6502 | M65C02;
   else
     return 0;
 

@@ -19,6 +19,9 @@ This module provides the following additional options:
 
 @table @option
 
+    @item -cpudebug=<n>
+        Enables debugging output.
+
     @item -m8086
         Generate code for the 8086 CPU.
 
@@ -57,9 +60,6 @@ This module provides the following additional options:
 
     @item -m64
         Generate code for 64-bit architectures (x86_64).
-
-    @item -cpudebug=<n>
-        Enables debugging output.
 
 @end table
 

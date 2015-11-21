@@ -15,6 +15,7 @@
 
 /* data type to represent a target-address */
 typedef int32_t taddr;
+typedef uint32_t utaddr;
 
 /* minimum instruction alignment */
 #define INST_ALIGN 2

@@ -303,7 +303,7 @@ static taddr reloffset(expr *tree,section *sec,taddr pc)
     val=tree->c.val;
   }else{
     btype=find_base(tree,&sym,sec,pc);
-    if(btype!=BASE_OK||sym->type!=LABSYM||sym->sec!=sec)
+    if(btype!=BASE_OK||!LOCREF(sym)||sym->sec!=sec)
       val=0xffff;
     else{
       eval_expr(tree,&val,sec,pc);
@@ -626,7 +626,7 @@ dblock *eval_instruction(instruction *p,section *sec,taddr pc)
 }
 
 /* Create a dblock (with relocs, if necessary) for size bits of data. */
-dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
+dblock *eval_data(operand *op,size_t bitsize,section *sec,taddr pc)
 {
   dblock *new=new_dblock();
   taddr val;
@@ -653,7 +653,7 @@ dblock *eval_data(operand *op,taddr bitsize,section *sec,taddr pc)
 
 /* Calculate the size of the current instruction; must be identical
    to the data created by eval_instruction. */
-taddr instruction_size(instruction *p,section *sec,taddr pc)
+size_t instruction_size(instruction *p,section *sec,taddr pc)
 {
   int c=translate(p,sec,pc),add=0;
   if(c&JMPCONV){ add=4;c&=~JMPCONV;}

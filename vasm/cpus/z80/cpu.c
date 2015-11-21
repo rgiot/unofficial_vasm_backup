@@ -1539,6 +1539,12 @@ static void write_opcode(mnemonic *opcode, dblock *db, int size, section *sec, t
                 val -= ( pc + db->size );
             }
         }
+
+	// Ensure result used 8 bits
+	if (opcode->ext.mode == TYPE_MISC8) {
+	    val = val & 0xff;
+	}
+
         if ( exprsize == 1 && ( val < -128 || val >= 256 ||
              (opcode->ext.mode == TYPE_RELJUMP && val >= 128 ) ) )
             cpu_error(3, val);

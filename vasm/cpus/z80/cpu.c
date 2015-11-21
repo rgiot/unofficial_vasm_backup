@@ -94,7 +94,7 @@ mnemonic mnemonics[] = {
     "cp",   { OP_A|OP_RALT, OP_REG8 | OP_INDEX },               { TYPE_ARITH8, 0xb8, CPU_ALL, F_ALL, 0, 0, RCM_EMU_INCREMENT },
     "cp",   { OP_A|OP_RALT, OP_REG8 | OP_INDEX },               { TYPE_ARITH8, 0x7fb8, CPU_RCM4000, F_ALL },
     "cp",   { OP_A|OP_RALT, OP_ABS },                           { TYPE_NONE, 0xfe, CPU_ALL, F_ALL },
-    "cp",   { OP_ABS },                                         { TYPE_NONE, 0xfe, CPU_ALL, F_ALTD },
+    "cp",   { OP_ABS },                                         { TYPE_ARITH8, 0xfe, CPU_ALL, F_ALTD },
     "cp",   { OP_JKHL|OP_RALT, OP_BCDE },                       { TYPE_NONE, 0xed58, CPU_RCM4000, F_ALTD },
     "cp",   { OP_HL|OP_RALT, OP_DE },                           { TYPE_NONE, 0xED48, CPU_RCM4000, F_ALTD }, /* cp hl,de */
     "cp",   { OP_HL|OP_RALT, OP_ABS },                          { TYPE_NONE, 0x48, CPU_RCM4000, F_ALTD }, /* cp hl,de */
@@ -1541,7 +1541,7 @@ static void write_opcode(mnemonic *opcode, dblock *db, int size, section *sec, t
         }
 
 	// Ensure result used 8 bits
-	if (opcode->ext.mode == TYPE_MISC8) {
+	if (opcode->ext.mode == TYPE_MISC8 || opcode->ext.mode == TYPE_ARITH8) {
 	    val = val & 0xff;
 	}
 

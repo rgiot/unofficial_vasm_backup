@@ -1,1 +1,8 @@
 Unofficial backup of vasm http://sun.hasenbraten.de/vasm/
+
+Several patches are in progress ; they are related to the configuraiton `CPU=z80` with `SYNTAX=oldstyle`.
+Each patch is within its own branch.
+
+ - `column` allow to use `:` in order to have several opcodes per line
+ - `outofrange` fix some issues with 8bits maths computed on 16bits
+ - `zshcompletion` write a zsh completion script to ease the use of vasm

@@ -1007,10 +1007,23 @@ char *read_next_line(void)
   /* copy next line to linebuf */
   char *s_backup = s;
   char within_comment = 0;
-  while (s<srcend && *s!='\0' && *s!='\n' && ( s==s_backup || (iscoment(s) && !isopcodedelimiter(s)))) {
+  char within_string = 0;
+  char string_delimiter;
+  while (s<srcend && *s!='\0' && *s!='\n' && ( s==s_backup || (within_comment || within_string || !isopcodedelimiter(s)))) {
     int nc;
 
     if (!within_comment) within_comment = iscomment(s);
+    if (!within_string){
+      if (*s == '\'' || *s == '"'){
+        string_delimiter = *s;
+        within_string    = 1; 
+      }
+    }
+    else {
+      if (*s==string_delimiter && *(s-1) != '\\') {
+        within_string = 0;
+      }
+    }
 
     if (d >= lbufend)
       general_error(54);  /* line buffer overflow */

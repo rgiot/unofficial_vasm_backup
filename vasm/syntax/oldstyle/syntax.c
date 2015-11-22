@@ -1108,7 +1108,7 @@ void parse(void)
   instruction *ip;
 
   while (line = read_next_line()) {
-    printf("line: %s\n", line);
+    printf("line to parse: %s\n", line);
     if (parse_end)
       continue;
 

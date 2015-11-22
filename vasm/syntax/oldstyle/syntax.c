@@ -72,6 +72,11 @@ int isopcodedelimiter(char *s)
 
 }
 
+int iscomment(char *s)
+{
+  return *(s) == commentchar;
+}
+
 
 /* check for end of line, issue error, if not */
 void eol(char *s)

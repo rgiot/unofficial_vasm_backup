@@ -2,6 +2,7 @@
 /* (c) in 2002,2012,2014 by Frank Wille */
 
 int isopcodedelimiter(char *s);
+int iscomment(char *s);
 
 /* macros to recognize identifiers */
 #define ISIDSTART(x) ((x)=='.'||(x)=='_'||isalpha((unsigned char)(x)))

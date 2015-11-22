@@ -1006,8 +1006,11 @@ char *read_next_line(void)
 
   /* copy next line to linebuf */
   char *s_backup = s;
-  while (s<srcend && *s!='\0' && *s!='\n' && ( s==s_backup || !isopcodedelimiter(s))) {
+  char within_comment = 0;
+  while (s<srcend && *s!='\0' && *s!='\n' && ( s==s_backup || (iscoment(s) && !isopcodedelimiter(s)))) {
     int nc;
+
+    if (!within_comment) within_comment = iscomment(s);
 
     if (d >= lbufend)
       general_error(54);  /* line buffer overflow */

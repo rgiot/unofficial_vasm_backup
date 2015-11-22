@@ -66,11 +66,18 @@ char *skip(char *s)
 }
 
 
+int isopcodedelimiter(char *s) 
+{
+  return *(s) == ':' ;
+
+}
+
+
 /* check for end of line, issue error, if not */
 void eol(char *s)
 {
   s = skip(s);
-  if (*s!='\0' && *s!=commentchar)
+  if (!ISEOL(s))
     syntax_error(6);
 }
 
@@ -1096,6 +1103,7 @@ void parse(void)
   instruction *ip;
 
   while (line = read_next_line()) {
+    printf("line: %s\n", line);
     if (parse_end)
       continue;
 

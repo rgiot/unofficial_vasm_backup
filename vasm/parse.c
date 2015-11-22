@@ -149,6 +149,16 @@ char *parse_name(char **start)
   return name;
 }
 
+/**
+ * When several instruction are possibles
+ * skip until the next one
+ */
+static char *skip_eom(char *s, char *e)
+{
+  while (s<e && *s!='\0' && *s!='\n' && *s!='\r' && !isopcodedelimiter(s))
+    s++;
+  return s;
+}
 
 static char *skip_eol(char *s,char *e)
 {
@@ -995,7 +1005,8 @@ char *read_next_line(void)
   }
 
   /* copy next line to linebuf */
-  while (s<srcend && *s!='\0' && *s!='\n') {
+  char *s_backup = s;
+  while (s<srcend && *s!='\0' && *s!='\n' && ( s==s_backup || !isopcodedelimiter(s))) {
     int nc;
 
     if (d >= lbufend)
@@ -1027,7 +1038,7 @@ char *read_next_line(void)
   }
 
   *d = '\0';
-  if (s<srcend && *s=='\n')
+  if (s<srcend && (*s=='\n' || isopcodedelimiter(s)) )
     s++;
   cur_src->srcptr = s;
 

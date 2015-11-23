@@ -932,12 +932,15 @@ char *read_next_line(void)
       break;
   }
 
-  if (!afterdelimiter) cur_src->line++;
 
   s = cur_src->srcptr;
   d = cur_src->linebuf;
   lbufend = d + MAXLINELENGTH - 256;
   nparam = cur_src->num_params;
+  
+  if (!afterdelimiter) {
+    cur_src->line++;
+  }
 
   /* line buffer starts with 0, to allow checks for left-hand character */
   *d++ = 0;
@@ -1061,9 +1064,18 @@ char *read_next_line(void)
     withdelimiter=1;
   }
   *d = '\0';
-  if (s<srcend && (*s=='\n' || isopcodedelimiter(s)) )
+  if (s<srcend && (*s=='\n' /*|| isopcodedelimiter(s)*/) )
     s++;
   cur_src->srcptr = s;
+
+  if (afterdelimiter && d>cur_src->linebuf) {
+    if (':' != *(cur_src->linebuf+1)) {
+      printf("Error when parsing delimited code -%s-\n", cur_src->linebuf + 1);
+      exit(-1);
+    }
+    *(cur_src->linebuf+1) = ' ';
+    printf("delimiter to remove -%s-\n", cur_src->linebuf + 1);
+  }
 
   if (listena) {
     listing *new = mymalloc(sizeof(*new));
@@ -1076,6 +1088,7 @@ char *read_next_line(void)
     new->pc = 0;
     new->src = cur_src;
     strncpy(new->txt,cur_src->linebuf+1,MAXLISTSRC);
+
     if (first_listing) {
       last_listing->next = new;
       last_listing = new;

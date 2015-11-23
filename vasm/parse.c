@@ -885,6 +885,8 @@ section *find_structure(char *name,int name_len)
 }
 
 
+char afterdelimiter=0;
+
 /* reads the next input line */
 char *read_next_line(void)
 {
@@ -892,6 +894,7 @@ char *read_next_line(void)
   int nparam;
   int len = MAXLINELENGTH-2;
   char *rept_end = NULL;
+  char withdelimiter = 0;
 
   /* check if end of source is reached */
   for (;;) {
@@ -929,7 +932,8 @@ char *read_next_line(void)
       break;
   }
 
-  cur_src->line++;
+  if (!afterdelimiter) cur_src->line++;
+
   s = cur_src->srcptr;
   d = cur_src->linebuf;
   lbufend = d + MAXLINELENGTH - 256;
@@ -1053,6 +1057,9 @@ char *read_next_line(void)
       s++;  /* line buffer is full, ignore additional characters */
   }
 
+  if (isopcodedelimiter(s)) {
+    withdelimiter=1;
+  }
   *d = '\0';
   if (s<srcend && (*s=='\n' || isopcodedelimiter(s)) )
     s++;
@@ -1082,6 +1089,8 @@ char *read_next_line(void)
   s = cur_src->linebuf+1;
   if (rept_end)
     start_repeat(rept_end);
+
+  afterdelimiter = withdelimiter;
   return s;
 }
 

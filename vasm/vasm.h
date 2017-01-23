@@ -1,5 +1,5 @@
 /* vasm.h  main header file for vasm */
-/* (c) in 2002-2015 by Volker Barthelmann */
+/* (c) in 2002-2016 by Volker Barthelmann */
 
 #include <stdlib.h>
 #include <stddef.h>
@@ -90,6 +90,7 @@ struct source {
   unsigned long id;
   char *srcptr;
   int line;
+  size_t bufsize;
   char *linebuf;
 #ifdef CARGSYM
   expr *cargexp;
@@ -160,15 +161,13 @@ extern listing *first_listing,*last_listing,*cur_listing;
 extern int done,final_pass;
 extern int listena,listformfeed,listlinesperpage,listnosyms;
 extern int mnemonic_cnt;
-extern int nocase,no_symbols,pic_check;
+extern int nocase,no_symbols,pic_check,secname_attr,exec_out,chklabels;
 extern hashtable *mnemohash;
 extern source *cur_src;
 extern section *current_section;
 extern char *filename;
 extern char *debug_filename;  /* usually an absolute C source file name */
 extern char *inname,*outname,*listname;
-extern int secname_attr;
-extern int exec_out;
 extern char *output_format;
 extern char emptystr[];
 extern char vasmsym_name[];
@@ -193,9 +192,12 @@ void switch_section(char *,char *);
 void switch_offset_section(char *,taddr);
 void add_align(section *,taddr,expr *,int,unsigned char *);
 section *default_section(void);
+#if NOT_NEEDED
 section *restore_section(void);
 section *restore_org(void);
-int end_rorg();
+#endif
+int end_rorg(void);
+void try_end_rorg(void);
 void start_rorg(taddr);
 void print_section(FILE *,section *);
 void new_include_path(char *);

@@ -1,5 +1,5 @@
 /* syntax.c  syntax module for vasm */
-/* (c) in 2002-2015 by Volker Barthelmann and Frank Wille */
+/* (c) in 2002-2016 by Volker Barthelmann and Frank Wille */
 
 #include "vasm.h"
 #include "stabs.h"
@@ -13,7 +13,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm std syntax module 4.1 (c) 2002-2015 Volker Barthelmann";
+char *syntax_copyright="vasm std syntax module 5.0c (c) 2002-2016 Volker Barthelmann";
 hashtable *dirhash;
 
 static char textname[]=".text",textattr[]="acrx";
@@ -25,7 +25,7 @@ static char bssname[]=".bss",bssattr[]="aurw";
 static char sbssname[]=".sbss",sbssattr[]="aurw";
 static char tocdname[]=".tocd",tocdattr[]="adrw";
 
-#if defined(VASM_CPU_C16X) || defined(VASM_CPU_M68K) || defined(VASM_CPU_650X) || defined(VASM_CPU_ARM) || defined(VASM_CPU_Z80)|| defined(VASM_CPU_6800) || defined(VASM_CPU_JAGRISC)
+#if defined(VASM_CPU_C16X) || defined(VASM_CPU_M68K) || defined(VASM_CPU_650X) || defined(VASM_CPU_ARM) || defined(VASM_CPU_Z80)|| defined(VASM_CPU_6800) || defined(VASM_CPU_JAGRISC) || defined(VASM_CPU_QNICE)
 char commentchar=';';
 #else
 char commentchar='#';
@@ -55,10 +55,11 @@ static struct namelen endr_dirlist[] = {
   { 4,&endrname[1] }, { 0,0 }
 };
 
-static int parse_end=0;
-static int nodotneeded=0;
-static int alloccommon=0;
-static int noesc=0;
+static int parse_end;
+static int nodotneeded;
+static int alloccommon;
+static int align_data;
+static int noesc;
 static taddr sdlimit=-1; /* max size of common data in .sbss section */
 
 
@@ -98,13 +99,14 @@ char *skip_operand(char *s)
   while(1){
     c = *s;
     if(START_PARENTH(c)) par_cnt++;
-    if(END_PARENTH(c)){
+    else if(END_PARENTH(c)){
       if(par_cnt>0)
         par_cnt--;
       else
         syntax_error(3);
-    }
-    if(ISEOL(s)||(c==','&&par_cnt==0))
+    }else if(c=='\''||c=='\"')
+      s=skip_string(s,c,NULL)-1;
+    else if(ISEOL(s)||(c==','&&par_cnt==0))
       break;
     s++;
   }
@@ -145,31 +147,9 @@ static taddr comma_constexpr(char **s)
   return 0;
 }
 
-static void add_const_datadef(section *s,taddr val,int size,int align)
-{
-  char buf[32];
-  int len;
-  operand *op;
-
-  if (size <= 32) {
-    len = sprintf(buf,"%ld",(long)val);
-    op = new_operand();
-    if (parse_operand(buf,len,op,DATA_OPERAND(size))) {
-      atom *a = new_datadef_atom(size,op);
-
-      a->align = align;
-      add_atom(s,a);
-    }
-    else
-      syntax_error(8);
-  }
-  else
-    ierror(0);
-}
-
 static void handle_section(char *s)
 {
-  char *name,*attr,*p;
+  char *name,*attr,*new,*p;
   uint32_t mem=0;
   section *sec;
 
@@ -179,13 +159,34 @@ static void handle_section(char *s)
   }
   if(*s==','){
     s=skip(s+1);
-    if(*s!='\"') general_error(6,'\"');  /* quote expected */
+    if(*s!='\"')
+      general_error(6,'\"');  /* quote expected */
     if(attr=parse_name(&s)){
       if(*s==','){
-        /* optional memory flags (vasm-specific) */
         p=s=skip(s+1);
-        mem=parse_constexpr(&s);
-        if(s==p) syntax_error(9);  /* memory flags */
+        if(*s=='@'||*s=='%'){
+          /* ELF section type "progbits" or "nobits" */
+          s++;
+          if(new=parse_identifier(&s)){
+            if(!strcmp(new,"nobits")){
+              myfree(new);
+              if(strchr(attr,'u')==NULL){
+                new=mymalloc(strlen(attr)+2);
+                sprintf(new,"u%s",attr);
+                myfree(attr);
+                attr=new;
+              }
+            }else{
+              if(strcmp(new,"progbits"))
+                syntax_error(14);  /* invalid sectiont type ignored */
+              myfree(new);
+            }
+          }
+        }else{
+          /* optional memory flags (vasm-specific) */
+          mem=parse_constexpr(&s);
+          if(s==p) syntax_error(9);  /* memory flags */
+        }
       }
     }else{
       syntax_error(7);  /* section flags */
@@ -220,6 +221,10 @@ static void handle_org(char *s)
       syntax_error(18);  /* syntax error */
       return;
     }
+  }
+  else if (current_section != NULL) {
+    /* .org inside a section is treated as an offset */
+    add_atom(0,new_roffs_atom(parse_expr_tmplab(&s)));
   }
   else
     set_section(new_org(parse_constexpr(&s)));
@@ -270,7 +275,7 @@ static void handle_data(char *s,int size,int noalign)
         atom *a;
 
         a=new_datadef_atom(OPSZ_BITS(size),op);
-        if(noalign)
+        if(!align_data||noalign)
           a->align=1;
         add_atom(0,a);
       }else
@@ -605,19 +610,19 @@ static expr *read_stabexp(char **s)
 static void handle_stabs(char *s)
 {
   char *name;
+  size_t len;
   int t,o,d;
 
-  if (*s++ == '\"') {
-    name = s;
-    while (*s && *s!='\"')
-      s++;
-    name = cnvstr(name,s-name);
+  if (*s == '\"') {
+    skip_string(s,*s,&len);
+    name = mymalloc(len+1);
+    s = read_string(name,s,*s,8);
+    name[len] = '\0';
   }
   else {
     general_error(6,'\"');  /* quote expected */
     return;
   }
-  s++;
   t = comma_constexpr(&s);
   o = comma_constexpr(&s);
   d = comma_constexpr(&s);
@@ -1265,21 +1270,15 @@ char *parse_macro_arg(struct macro *m,char *s,
 /* expands arguments and special escape codes into macro context */
 int expand_macro(source *src,char **line,char *d,int dlen)
 {
-  int n,nc=-1;
+  int n,nc=0;
   char *end,*s=*line;
 
   if (*s++ == '\\') {
     /* possible macro expansion detected */
     if (*s == '@') {
       /* \@: insert a unique id */
-      char buf[16];
-
-      nc = sprintf(buf,"%lu",src->id);
-      if (dlen >= nc) {
-        s++;
-        memcpy(d,buf,nc);
-      }
-      else
+      nc = sprintf(d,"%lu",src->id);
+      if (nc >= dlen)
         nc = -1;
     }
     else if (*s=='(' && *(s+1)==')') {
@@ -1297,13 +1296,15 @@ int expand_macro(source *src,char **line,char *d,int dlen)
     if (nc >= 0)
       *line = s;  /* update line pointer when expansion took place */
   }           
-  return nc;  /* number of chars written to line buffer, -1: no expansion */
+  return nc;  /* number of chars written to line buffer, -1: out of space */
 }
 
 void my_exec_macro(source *src)
 {
+#if 0 /* make it possible to use default values, when params are missing */
   if (src->macro->num_argnames>=0 && src->num_params<src->macro->num_argnames)
     general_error(24);  /* missing macro parameters (named) */
+#endif
 }
 
 char *const_prefix(char *s,int *base)
@@ -1325,7 +1326,7 @@ char *const_prefix(char *s,int *base)
       *base=8;
       return s;
     }
-    if(s[1]=='f'||s[1]=='F'||s[1]=='r'||s[1]=='R')
+    if(s[1]=='d'||s[1]=='D'||s[1]=='f'||s[1]=='F'||s[1]=='r'||s[1]=='R')
       s+=2;  /* floating point is handled automatically, so skip prefix */
   }
   *base=10;
@@ -1352,12 +1353,13 @@ char *get_local_label(char **start)
       *start = skip(s);
     }
   }
-  else {
-    while (isalnum((unsigned char)*s) || *s=='_')  /* '_' needed for '\@' */
+  else if (isalnum((unsigned char)*s) || *s=='_') {
+    s++;
+    while (ISIDCHAR(*s))
       s++;
-    if (s!=*start && *s=='$') {
-      name = make_local_label(NULL,0,*start,s-*start);
-      *start = skip(++s);
+    if (s>(*start+1) && *(s-1)=='$') {
+      name = make_local_label(NULL,0,*start,(s-1)-*start);
+      *start = skip(s);
     }
   }
   return name;
@@ -1386,7 +1388,11 @@ int syntax_args(char *p)
 {
   int i;
 
-  if (!strcmp(p,"-nodotneeded")) {
+  if (!strcmp(p,"-align")) {
+    align_data = 1;
+    return 1;
+  }
+  else if (!strcmp(p,"-nodotneeded")) {
     nodotneeded = 1;
     return 1;
   }

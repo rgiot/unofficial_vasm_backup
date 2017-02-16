@@ -1,5 +1,5 @@
 /* symbol.c - manage all kinds of symbols */
-/* (c) in 2014-2016 by Volker Barthelmann and Frank Wille */
+/* (c) in 2014-2017 by Volker Barthelmann and Frank Wille */
 
 #include "vasm.h"
 
@@ -42,6 +42,8 @@ void print_symbol(FILE *f,symbol *p)
     print_expr(f,p->expr);
     fprintf(f,") ");
   }
+  if (!(p->flags&(USED|VASMINTERN)))
+    fprintf(f,"UNUSED ");
   if (p->flags&VASMINTERN)
     fprintf(f,"INTERNAL ");
   if (p->flags&EXPORT)

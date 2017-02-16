@@ -188,10 +188,11 @@ static section *prepare_sections(section *first_sec,symbol *sym)
                (sym->type==EXPRESSION && (sym->flags&EXPORT))) {
         if (sym->type == EXPRESSION) {
           /* put absolute globals symbols into the first section */
-          if (first_sec == NULL)
-            first_sec = dummy_section();
+          if (first_sec == NULL) {
+            first_sec = first_nonbss = dummy_section();
+            first_sec->idx = sec_cnt++;
+          }
           first_sec->flags |= HAS_SYMBOLS;
-          first_sec->idx = sec_cnt++;
           sym->sec = first_sec;
         }
         /* assign symbols to the section they are defined in */

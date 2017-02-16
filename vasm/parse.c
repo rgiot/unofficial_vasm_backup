@@ -176,7 +176,9 @@ char *skip_identifier(char *s)
     s++;
     while (ISIDCHAR(*s))
       s++;
-    return CHKIDEND(name,s);
+    if (s = CHKIDEND(name,s))
+      if (!ISBADID(name,s-name))
+        return s;
   }
   return NULL;
 }
@@ -1069,7 +1071,7 @@ char *read_next_line(void)
       cur_src->linebuf = myrealloc(cur_src->linebuf,cur_src->bufsize);
       d = cur_src->linebuf + offs;
       if (debug)
-        printf("Doubled line buffer size to %d bytes.\n",cur_src->bufsize);
+        printf("Doubled line buffer size to %lu bytes.\n",cur_src->bufsize);
     }
   }
 

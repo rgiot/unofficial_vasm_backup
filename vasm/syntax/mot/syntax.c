@@ -1,5 +1,5 @@
 /* syntax.c  syntax module for vasm */
-/* (c) in 2002-2016 by Frank Wille */
+/* (c) in 2002-2017 by Frank Wille */
 
 #include "vasm.h"
 
@@ -12,7 +12,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm motorola syntax module 3.9d (c) 2002-2016 Frank Wille";
+char *syntax_copyright="vasm motorola syntax module 3.9e (c) 2002-2017 Frank Wille";
 hashtable *dirhash;
 char commentchar = ';';
 
@@ -2272,6 +2272,7 @@ int syntax_args(char *p)
     esc_sequences = 0;
     allmp = 1;
     dot_idchar = 1;
+    warn_unalloc_ini_dat = 1;
     return 1;
   }
   else if (!strcmp(p,"-phxass")) {

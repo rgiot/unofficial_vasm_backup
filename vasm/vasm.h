@@ -159,6 +159,7 @@ struct listing {
 
 extern listing *first_listing,*last_listing,*cur_listing;
 extern int done,final_pass;
+extern int warn_unalloc_ini_dat;
 extern int listena,listformfeed,listlinesperpage,listnosyms;
 extern int mnemonic_cnt;
 extern int nocase,no_symbols,pic_check,secname_attr,exec_out,chklabels;

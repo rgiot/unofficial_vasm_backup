@@ -7,7 +7,7 @@
 #include "vasm.h"
 #include "stabs.h"
 
-#define _VER "vasm 1.7h"
+#define _VER "vasm 1.7i"
 char *copyright = _VER " (c) in 2002-2017 Volker Barthelmann";
 #ifdef AMIGA
 static const char *_ver = "$VER: " _VER " " __AMIGADATE__ "\r\n";
@@ -37,6 +37,7 @@ int pic_check;
 int done,final_pass,debug;
 int exec_out;
 int chklabels;
+int warn_unalloc_ini_dat;
 int listena,listformfeed=1,listlinesperpage=40,listnosyms;
 listing *first_listing,*last_listing,*cur_listing;
 struct stabdef *first_nlist,*last_nlist;
@@ -398,8 +399,10 @@ static void assemble(void)
         new_stabdef(p->content.nlist,sec);
       if(p->type==DATA&&bss){
         if(lasterrsrc!=p->src||lasterrline!=p->line){
-          if(sec->flags&UNALLOCATED)
+          if(sec->flags&UNALLOCATED){
+            if(warn_unalloc_ini_dat)
             general_error(54);  /* initialized data in offset section */
+          }
           else
             general_error(31);  /* initialized data in bss */
           lasterrsrc=p->src;

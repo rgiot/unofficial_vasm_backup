@@ -1348,6 +1348,7 @@ int expand_macro(source *src,char **line,char *d,int dlen)
     else if (*s == '@') {
       /* \@: insert a unique id */
       nc = snprintf(d,dlen,"_%06lu",src->id);
+      s++;
       if (nc >= dlen)
         nc = -1;
     }

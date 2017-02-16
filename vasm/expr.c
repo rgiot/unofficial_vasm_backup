@@ -97,6 +97,7 @@ static expr *primary_expr(void)
     symbol *sym=find_symbol(name);
     if(!sym)
       sym=new_import(name);
+    sym->flags|=USED;
     if (sym->type!=EXPRESSION){
       new=new_expr();
       new->type=SYM;
@@ -212,6 +213,7 @@ static expr *primary_expr(void)
 #endif
       sym=new_import(name);
     }
+    sym->flags|=USED;
     if (sym->type!=EXPRESSION){
       new=new_expr();
       new->type=SYM;

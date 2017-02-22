@@ -20,12 +20,23 @@ This syntax module provides the following additional options:
  
 @table @option
  
-@item -dotdir
- Directives have to be preceded by a dot (@code{.}).
-
 @item -autoexp
  Automatically export all non-local symbols, making them visible
  to other modules during linking.
+
+@item -dotdir
+ Directives have to be preceded by a dot (@code{.}).
+
+@item -i
+ Ignore everything after a blank in the operand field and treat it as a
+ comment. This option is only available when the backend does not separate
+ its operands with blanks as well.
+
+@item -noc
+ Disable C-style constant prefixes.
+
+@item -noi
+ Disable intel-style constant suffixes.
 
 @end table
 

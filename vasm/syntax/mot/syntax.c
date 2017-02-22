@@ -12,7 +12,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm motorola syntax module 3.9e (c) 2002-2017 Frank Wille";
+char *syntax_copyright="vasm motorola syntax module 3.9f (c) 2002-2017 Frank Wille";
 hashtable *dirhash;
 char commentchar = ';';
 
@@ -1834,35 +1834,29 @@ void parse(void)
 
     /* read operands, terminated by comma (unless in parentheses)  */
     op_cnt = 0;
-    if (!ISEOL(s)) {
-      while (op_cnt < MAX_OPERANDS) {
-        op[op_cnt] = s;
-        s = skip_operand(s);
-        op_len[op_cnt] = s - op[op_cnt];
-        op_cnt++;
+    while (!ISEOL(s) && op_cnt<MAX_OPERANDS) {
+      op[op_cnt] = s;
+      s = skip_operand(s);
+      op_len[op_cnt] = s - op[op_cnt];
+      op_cnt++;
 
-        if (allow_spaces) {
-          s = skip(s);
-          if (*s != ',')
-            break;
-          else
-            s = skip(s+1);
-        }
-        else {
-          if (*s != ',') {
-            if (check_comm)
-              comment_check(s);
-            break;
-          }
-          s++;
-        }
-        if (ISEOL(s)) {
-          syntax_error(6);  /* garbage at end of line */
+      if (allow_spaces) {
+        s = skip(s);
+        if (*s != ',')
+          break;
+        else
+          s = skip(s+1);
+      }
+      else {
+        if (*s != ',') {
+          if (check_comm)
+            comment_check(s);
           break;
         }
+        s++;
       }
-      eol(s);
     }
+    eol(s);
 
     ip = new_inst(inst,inst_len,op_cnt,op,op_len);
 

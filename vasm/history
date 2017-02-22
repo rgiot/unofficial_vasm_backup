@@ -2,8 +2,14 @@ vasm history
 =============
 
 - 1.7i (NO-RELEASE)
+o External references in ORG or RORG sections are allowed.
 o m68k: Support for Apollo Core 68080 and AMMX ISA.
+o 6502: Fixed potential segfault during zero-page optimization (new since
+  last version).
 o madmac-syntax: Fixed .long directive (which only aligned to even bytes).
+o oldstyle-syntax: New options -i (ignore everything in the operand after a
+  blank), -noc (no C-style constant prefixes) and -noi (no intel-style
+  constant suffixes).
 
 - 1.7h (14.02.17)
 o Implemented a dynamic line buffer. No limitations on line lengths anymore.

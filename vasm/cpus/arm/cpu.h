@@ -1,5 +1,5 @@
 /* cpu.h ARM cpu-description header-file */
-/* (c) in 2004,2014 by Frank Wille */
+/* (c) in 2004,2014,2016 by Frank Wille */
 
 #define LITTLEENDIAN (!arm_be_mode)
 #define BIGENDIAN (arm_be_mode)
@@ -10,6 +10,8 @@
 
 /* maximum number of mnemonic-qualifiers per mnemonic */
 #define MAX_QUALIFIERS 2
+/* but no qualifiers for macros */
+#define NO_MACRO_QUALIFIERS
 
 /* valid parentheses for cpu's operands */
 #define START_PARENTH(x) ((x)=='(' || (x)=='{')
@@ -105,8 +107,8 @@ enum {
   TUIM3,      /* 3-bit unsigned immediate at 8..6 */
   TUIM5,      /* 5-bit unsigned immediate at 10..6 */
   TUIM8,      /* 8-bit unsigned immediate at 7..0 */
+  TUIM9,      /* 9-bit unsigned immediate >> 2 at 6..0 */
   TUIMA,      /* 10-bit unsigned immediate >> 2 at 7..0 */
-  TSIM9,      /* 9-bit immediate >> 2 at 6..0, sign at bit 7 */
   TUI5I,      /* 5-bit unsigned immediate at 10..6 with terminating ] */
   TUI6I,      /* 6-bit unsigned immediate >> 1 at 10..6 with terminating ] */
   TUI7I,      /* 7-bit unsigned immediate >> 2 at 10..6 with terminating ] */

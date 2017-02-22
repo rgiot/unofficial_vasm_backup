@@ -19,7 +19,7 @@
   "symbol <%s> recursively defined",ERROR|FATAL,
   "fail: %s",ERROR,
   "section offset is lower than current pc",ERROR|FATAL,        /* 20 */
-  "character constant too long",ERROR,
+  "target data type overflow (%d bits)",WARNING,
   "undefined symbol <%s>",NOLINE|ERROR,
   "trailing garbage after option -%c",NOLINE|WARNING,
   "missing macro parameters",ERROR,
@@ -37,13 +37,13 @@
   "no current macro to exit",ERROR,
   "internal symbol %s redefined by user",FATAL,
   "illegal relocation",ERROR,
-  "",ERROR,
-  "",ERROR,                                                     /* 40 */
+  "label name conflicts with mnemonic",WARNING,
+  "label name conflicts with directive",WARNING,                /* 40 */
   "division by zero",ERROR,
   "illegal macro argument",ERROR,
   "reloc org is already set",ERROR|FATAL,
   "reloc org was not set",ERROR,
-  "",ERROR,                                                     /* 45 */
+  "illegal negative value",ERROR,                               /* 45 */
   "bad file-offset argument",ERROR,
   "assertion \"%s\" failed: %s",ERROR,
   "cannot declare structure within structure",ERROR,
@@ -52,7 +52,7 @@
   "macro name conflicts with mnemonic",WARNING,
   "macro name conflicts with directive",WARNING,
   "non-relocatable expression in equate <%s>",NOLINE|ERROR,
-  "line buffer overflow",ERROR|FATAL,
+  "initialized data in offset section",WARNING,
   "illegal structure recursion",ERROR|FATAL,                    /* 55 */
   "maximum number of macro recursions (%d) reached",ERROR|FATAL,
   "data has been auto-aligned",WARNING,

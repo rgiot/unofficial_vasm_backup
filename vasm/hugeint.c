@@ -1,4 +1,4 @@
-  /* hugeint.c implements huge integer operations at 128 bits */
+/* hugeint.c implements huge integer operations at 128 bits */
 /* (c) in 2014 by Frank Wille */
 
 #include <stdint.h>

@@ -1,5 +1,5 @@
 /* vasm.c  main module for vasm */
-/* (c) in 2002-2015 by Volker Barthelmann */
+/* (c) in 2002-2017 by Volker Barthelmann */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -7,8 +7,8 @@
 #include "vasm.h"
 #include "stabs.h"
 
-#define _VER "vasm 1.7e"
-char *copyright = _VER " (c) in 2002-2015 Volker Barthelmann";
+#define _VER "vasm 1.7i"
+char *copyright = _VER " (c) in 2002-2017 Volker Barthelmann";
 #ifdef AMIGA
 static const char *_ver = "$VER: " _VER " " __AMIGADATE__ "\r\n";
 #endif
@@ -36,6 +36,8 @@ int no_symbols;
 int pic_check;
 int done,final_pass,debug;
 int exec_out;
+int chklabels;
+int warn_unalloc_ini_dat;
 int listena,listformfeed=1,listlinesperpage=40,listnosyms;
 listing *first_listing,*last_listing,*cur_listing;
 struct stabdef *first_nlist,*last_nlist;
@@ -61,10 +63,9 @@ struct deplist {
 static struct deplist *first_depend,*last_depend;
 
 static section *first_section,*last_section;
+#if NOT_NEEDED
 static section *prev_sec=NULL,*prev_org=NULL;
-
-static taddr rorg_pc=0;
-static taddr org_pc;
+#endif
 
 /* MNEMOHTABSIZE should be defined by cpu module */
 #ifndef MNEMOHTABSIZE
@@ -110,11 +111,9 @@ void leave(void)
     exit(EXIT_SUCCESS);
 }
 
-/* Removes all unallocated (offset) sections from the list and converts
-   their label symbols into absolute expressions. */
-static void remove_unalloc_sects(void)
+/* Convert all labels from an offset-section into absolute expressions. */
+static void convert_offset_labels(void)
 {
-  section *prev,*sec;
   symbol *sym;
 
   for (sym=first_symbol; sym; sym=sym->next) {
@@ -124,6 +123,13 @@ static void remove_unalloc_sects(void)
       sym->sec = NULL;
     }
   }
+}
+
+/* Removes all unallocated (offset) sections from the list. */
+static void remove_unalloc_sects(void)
+{
+  section *prev,*sec;
+
   for (sec=first_section,prev=NULL; sec; sec=sec->next) {
     if (sec->flags&UNALLOCATED) {
       if (prev)
@@ -155,6 +161,8 @@ static void new_stabdef(aoutnlist *nlist,section *sec)
        new->base = NULL;
        general_error(38);  /* illegal relocation */
     }
+    else if (new->base != NULL)
+      new->base->flags |= REFERENCED;
   }
   if (last_nlist)
     last_nlist = last_nlist->next = new;
@@ -165,6 +173,7 @@ static void new_stabdef(aoutnlist *nlist,section *sec)
 
 static void resolve_section(section *sec)
 {
+  taddr rorg_pc,org_pc;
   int fastphase=FASTOPTPHASE;
   int pass=0;
   int extrapass;
@@ -173,6 +182,7 @@ static void resolve_section(section *sec)
 
   do{
     done=1;
+    rorg_pc=0;
     if (++pass>=MAXPASSES){
       general_error(7,sec->name);
       break;
@@ -247,6 +257,10 @@ static void resolve_section(section *sec)
       }
       sec->pc+=size;
     }
+    if(rorg_pc!=0){
+      sec->pc=org_pc+(sec->pc-rorg_pc);
+      sec->flags&=~ABSOLUTE;  /* workaround for misssing RORGEND */
+    }
     /* Extend the fast-optimization phase, when there was no atom which
        became larger than in the previous pass. */
     if(extrapass) fastphase++;
@@ -267,24 +281,18 @@ static void assemble(void)
 {
   section *sec;
   taddr basepc;
+  taddr rorg_pc=0;
+  taddr org_pc;
   atom *p;
-  char *attr;
   int bss;
 
-  remove_unalloc_sects();
+  convert_offset_labels();
   final_pass=1;
   for(sec=first_section;sec;sec=sec->next){
     source *lasterrsrc=NULL;
     int lasterrline=0;
     sec->pc=sec->org;
-    attr=sec->attr;
-    bss=0;
-    while(*attr){
-      if(*attr++=='u'){
-        bss=1;
-        break;
-      }
-    }
+    bss=strchr(sec->attr,'u')!=NULL;
     for(p=sec->first;p;p=p->next){
       basepc=sec->pc;
       sec->pc=pcalign(p,sec->pc);
@@ -308,15 +316,17 @@ static void assemble(void)
         else if (aa->type==DATA||aa->type==DATADEF)
           general_error(57);  /* data has been auto-aligned */
       }
-      if(p->type==RORG&&rorg_pc==0){
+      if(p->type==RORG){
         rorg_pc=*p->content.rorg;
         org_pc=sec->pc;
         sec->pc=rorg_pc;
+        sec->flags|=ABSOLUTE;
       }
       else if(p->type==RORGEND){
         if(rorg_pc!=0){
           sec->pc=org_pc+(sec->pc-rorg_pc);
           rorg_pc=0;
+          sec->flags&=~ABSOLUTE;
         }
         else
           general_error(44);  /* reloc org was not set */
@@ -366,13 +376,6 @@ static void assemble(void)
         else
           general_error(30);  /* expression must be constant */
       }
-      else if(p->type==DATA&&bss){
-        if(lasterrsrc!=p->src||lasterrline!=p->line){
-          general_error(31);  /* initialized data in bss */
-          lasterrsrc=p->src;
-          lasterrline=p->line;
-        }
-      }
 #if HAVE_CPU_OPTS
       else if(p->type==OPTS)
         cpu_opts(p->content.opts);
@@ -394,10 +397,29 @@ static void assemble(void)
       }
       else if(p->type==NLIST)
         new_stabdef(p->content.nlist,sec);
+      if(p->type==DATA&&bss){
+        if(lasterrsrc!=p->src||lasterrline!=p->line){
+          if(sec->flags&UNALLOCATED){
+            if(warn_unalloc_ini_dat)
+            general_error(54);  /* initialized data in offset section */
+          }
+          else
+            general_error(31);  /* initialized data in bss */
+          lasterrsrc=p->src;
+          lasterrline=p->line;
+        }
+      }
       sec->pc+=atom_size(p,sec,sec->pc);
       sec->flags&=~RESOLVE_WARN;
     }
+    /* leave RORG-mode, when section ends */
+    if(rorg_pc!=0){
+      sec->pc=org_pc+(sec->pc-rorg_pc);
+      rorg_pc=0;
+      sec->flags&=~ABSOLUTE;
+    }
   }
+  remove_unalloc_sects();
 }
 
 static void undef_syms(void)
@@ -412,18 +434,27 @@ static void undef_syms(void)
   }
 }
 
-/* All expressions which are based on a label are turned into a new label. */
-static void label_expressions(void)
+static void fix_labels(void)
 {
   symbol *sym,*base;
   taddr val;
 
   for(sym=first_symbol;sym;sym=sym->next){
-    if(sym->type==EXPRESSION){
+    /* turn all absolute mode labels into absolute symbols */
+    if((sym->flags&ABSLABEL)&&sym->type==LABSYM){
+      sym->type=EXPRESSION;
+      sym->flags&=~(TYPE_MASK|COMMON);
+      sym->sec=NULL;
+      sym->size=NULL;
+      sym->align=0;
+      sym->expr=number_expr(sym->pc);
+    }
+    /* expressions which are based on a label are turned into a new label */
+    else if(sym->type==EXPRESSION){
       if(!eval_expr(sym->expr,&val,NULL,0)){
         if(find_base(sym->expr,&base,NULL,0)==BASE_OK){
           /* turn into an offseted label symbol from the base's section */
-          sym->type=LABSYM;
+          sym->type=base->type;
           sym->sec=base->sec;
           sym->pc=val;
           sym->align=1;
@@ -703,6 +734,10 @@ int main(int argc,char **argv)
       unsigned_shift=1;
       continue;
     }
+    else if(!strcmp("-chklabels",argv[i])){
+      chklabels=1;
+      continue;
+    }
     if(cpu_args(argv[i]))
       continue;
     if(syntax_args(argv[i]))
@@ -739,7 +774,7 @@ int main(int argc,char **argv)
   cur_src=NULL;
   if(errors==0)
     undef_syms();
-  label_expressions();
+  fix_labels();
   if(produce_listing){
     if(!listname)
       listname="a.lst";
@@ -935,7 +970,8 @@ source *new_source(char *filename,char *text,size_t size)
   s->id = id++;	        /* every source has unique id - important for macros */
   s->srcptr = text;
   s->line = 0;
-  s->linebuf = mymalloc(MAXLINELENGTH);
+  s->bufsize = INITLINELEN;
+  s->linebuf = mymalloc(INITLINELEN);
 #ifdef CARGSYM
   s->cargexp = NULL;
 #endif
@@ -960,12 +996,14 @@ void end_source(source *s)
 /* set current section, remember last */
 void set_section(section *s)
 {
+#if NOT_NEEDED
   if (current_section!=NULL && !(current_section->flags & UNALLOCATED)) {
     if (current_section->flags & ABSOLUTE)
       prev_org = current_section;
     else
       prev_sec = current_section;
   }
+#endif
 #if HAVE_CPU_OPTS
   if (!(s->flags & UNALLOCATED))
     cpu_opts_init(s);  /* set initial cpu opts before the first atom */
@@ -1060,6 +1098,7 @@ section *default_section(void)
   return sec;
 }
 
+#if NOT_NEEDED
 /* restore last relocatable section */
 section *restore_section(void)
 {
@@ -1077,6 +1116,7 @@ section *restore_org(void)
     return prev_org;
   return new_org(0);  /* no previous org: default to ORG 0 */
 }
+#endif /* NOT_NEEDED */
 
 /* end a relocated ORG block */
 int end_rorg(void)
@@ -1093,10 +1133,18 @@ int end_rorg(void)
       s->flags |= ABSOLUTE;
     else
       s->flags &= ~ABSOLUTE;
+    s->flags &= ~IN_RORG;
     return 1;
   }
   general_error(44);  /* no Rorg block to end */
   return 0;
+}
+
+/* end a relocated ORG block when currently active */
+void try_end_rorg(void)
+{
+  if (current_section!=NULL && (current_section->flags&IN_RORG))
+    end_rorg();
 }
 
 /* start a relocated ORG block */

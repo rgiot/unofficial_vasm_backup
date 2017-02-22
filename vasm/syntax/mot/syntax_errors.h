@@ -17,6 +17,7 @@
   "macro id stack overflow",ERROR,
   "macro id pull without matching push",ERROR,
   "check comment",WARNING,
-  "",ERROR,
-  "",ERROR,                                                          /* 20 */
+  "invalid numeric expansion",ERROR,
+  "einline without inline",ERROR,                                    /* 20 */
   "missing %c",WARNING,
+  "maximum inline nesting depth exceeded (%d)",ERROR,

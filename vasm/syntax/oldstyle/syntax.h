@@ -1,5 +1,5 @@
 /* syntax.h  syntax header file for vasm */
-/* (c) in 2002,2012,2014 by Frank Wille */
+/* (c) in 2002,2012,2014,2017 by Frank Wille */
 
 int isopcodedelimiter(char *s);
 int iscomment(char *s);
@@ -9,9 +9,15 @@ int iscomment(char *s);
 #define ISIDCHAR(x) ((x)=='_'||isalnum((unsigned char)(x)))
 #define ISEOL(x) (*(x)=='\0' || *(x)==commentchar )
 #define ISEOM(x) (ISEOL(x) || isopcodedelimiter(x))
+#define ISBADID(p,l) ((l)==1&&(*(p)=='.'||*(p)=='_'))
+#define ISEOL(p) (*(p)=='\0' || *(p)==commentchar)
 
 /* result of a boolean operation */
 #define BOOLEAN(x) -(x)
+
+/* we have a special skip() function for expressions, called exp_skip() */
+char *exp_skip(char *);
+#define EXPSKIP() s=exp_skip(s)
 
 /* operator separation characters */
 #ifndef OPERSEP_COMMA

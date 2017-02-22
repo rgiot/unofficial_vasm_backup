@@ -1,5 +1,5 @@
 /* syntax.c  syntax module for vasm */
-/* (c) in 2002-2015 by Frank Wille */
+/* (c) in 2002-2017 by Frank Wille */
 
 #include "vasm.h"
 
@@ -12,7 +12,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm motorola syntax module 3.8a (c) 2002-2015 Frank Wille";
+char *syntax_copyright="vasm motorola syntax module 3.9f (c) 2002-2017 Frank Wille";
 hashtable *dirhash;
 char commentchar = ';';
 
@@ -42,6 +42,7 @@ static struct namelen erem_dirlist[] = {
   { 4,"erem" }, { 0,0 }
 };
 
+/* options */
 static int allmp;
 static int align_data;
 static int phxass_compat;
@@ -51,9 +52,19 @@ static int check_comm;
 static int dot_idchar;
 static char local_char = '.';
 
+/* unique macro IDs */
 #define IDSTACKSIZE 100
 static unsigned long id_stack[IDSTACKSIZE];
 static int id_stack_index;
+
+/* isolated local labels block */
+#define INLSTACKSIZE 100
+#define INLLABFMT "=%06d"
+static int inline_stack[INLSTACKSIZE];
+static int inline_stack_index;
+static char *saved_last_global_label;
+static char inl_lab_name[8];
+
 static int parse_end = 0;
 static expr *carg1;
 
@@ -369,6 +380,9 @@ static char *read_sec_attr(char *attr,char *s,uint32_t *mem)
 static void motsection(section *sec,uint32_t mem)
 /* mot-syntax specific section initializations on a new section */
 {
+  if (!devpac_compat)
+    try_end_rorg();  /* end a potential ORG block */
+
 #if NOT_NEEDED
   if (phxass_compat!=0 && strchr(sec->attr,'c')!=NULL) {
     /* CNOP alignments pad with NOP instruction in code sections */
@@ -424,6 +438,8 @@ static void handle_offset(char *s)
   else
     offs = -1;  /* use last offset */
 
+  if (!devpac_compat)
+    try_end_rorg();
   switch_offset_section(NULL,offs);
 }
 
@@ -490,8 +506,12 @@ static void handle_org(char *s)
     else
       syntax_error(7);  /* syntax error */
   }
-  else
-    set_section(new_org(parse_constexpr(&s)));
+  else {
+    if (current_section!=NULL && !(current_section->flags & ABSOLUTE))
+      start_rorg(parse_constexpr(&s));
+    else
+      set_section(new_org(parse_constexpr(&s)));
+  }
 }
 
 
@@ -1073,6 +1093,29 @@ static void handle_ifnd(char *s)
   ifdef(s,0);
 }
 
+static void ifmacro(char *s,int b)
+{
+  char *name = s;
+  int result;
+
+  if (s = skip_identifier(s)) {
+    result = find_macro(name,s-name) != NULL;
+    cond_if(result == b);
+  }
+  else
+    syntax_error(10);  /*identifier expected */
+}
+
+static void handle_ifmacrod(char *s)
+{
+  ifmacro(s,1);
+}
+
+static void handle_ifmacrond(char *s)
+{
+  ifmacro(s,0);
+}
+
 static void ifexp(char *s,int c)
 {
   expr *condexp = parse_expr_tmplab(&s);
@@ -1341,6 +1384,39 @@ static void handle_comment(char *s)
   /* otherwise it's just a comment to be ignored */
 }
 
+static void handle_inline(char *s)
+{
+  static int id;
+  char *last;
+
+  if (inline_stack_index < INLSTACKSIZE) {
+    sprintf(inl_lab_name,INLLABFMT,id);
+    last = set_last_global_label(inl_lab_name);
+    if (inline_stack_index == 0)
+      saved_last_global_label = last;
+    inline_stack[inline_stack_index++] = id++;
+  }
+  else
+    syntax_error(22,INLSTACKSIZE);  /* maximum inline nesting depth exceeded */
+}
+
+static void handle_einline(char *s)
+{
+  if (inline_stack_index > 0 ) {
+    if (--inline_stack_index == 0) {
+      set_last_global_label(saved_last_global_label);
+      saved_last_global_label = NULL;
+    }
+    else {
+      sprintf(inl_lab_name,INLLABFMT,inline_stack[inline_stack_index-1]);
+      set_last_global_label(inl_lab_name);
+    }
+  }
+  else
+    syntax_error(20);  /* einline without inline */
+}
+
+
 #define D 1 /* available for DevPac */
 #define P 2 /* available for PhxAss */
 struct {
@@ -1458,12 +1534,16 @@ struct {
   "ifnc",P|D,handle_ifnc,
   "ifd",P|D,handle_ifd,
   "ifnd",P|D,handle_ifnd,
+  "ifmacrod",0,handle_ifmacrod,
+  "ifmacrond",0,handle_ifmacrond,
   "ifeq",P|D,handle_ifeq,
   "ifne",P|D,handle_ifne,
   "ifgt",P|D,handle_ifgt,
   "ifge",P|D,handle_ifge,
   "iflt",P|D,handle_iflt,
   "ifle",P|D,handle_ifle,
+  "ifmi",0,handle_iflt,
+  "ifpl",0,handle_ifge,
   "if",P,handle_ifne,
   "else",P|D,handle_else,
   "elseif",P|D,handle_else,
@@ -1504,6 +1584,8 @@ struct {
   "printt",0,handle_printt,
   "printv",0,handle_printv,
   "auto",0,handle_noop,
+  "inline",P,handle_inline,
+  "einline",P,handle_einline,
 };
 #undef P
 #undef D
@@ -1756,14 +1838,7 @@ void parse(void)
       op[op_cnt] = s;
       s = skip_operand(s);
       op_len[op_cnt] = s - op[op_cnt];
-#if 0
-      /* This causes problems, when there is a comma in the comment field
-         of an instructions without operands. */
-      if (op_len[op_cnt] <= 0)
-        syntax_error(5);  /* missing operand */
-      else
-#endif
-        op_cnt++;
+      op_cnt++;
 
       if (allow_spaces) {
         s = skip(s);
@@ -1780,7 +1855,7 @@ void parse(void)
         }
         s++;
       }
-    }      
+    }
     eol(s);
 
     ip = new_inst(inst,inst_len,op_cnt,op,op_len);
@@ -1836,7 +1911,7 @@ char *parse_macro_arg(struct macro *m,char *s,
   }
   else {
     s = skip_operand(s);
-    param->len = s - param->name;
+    param->len = trim(s) - param->name;
   }
 
   return s;
@@ -1883,81 +1958,134 @@ static int copy_macro_carg(source *src,int inc,char *d,int len)
 /* expands arguments and special escape codes into macro context */
 int expand_macro(source *src,char **line,char *d,int dlen)
 {
-  int nc = -1;
+  int nc = 0;
   char *s = *line;
 
   if (*s++ == '\\') {
     /* possible macro expansion detected */
 
     if (*s == '\\') {
-      *d++ = *s++;
-      if (esc_sequences) {
-        *d++ = '\\';  /* make it a double \ again */
-        nc = 2;
+      if (dlen >= 1) {
+        *d++ = *s++;
+        if (esc_sequences) {
+          if (dlen >= 2) {
+            *d++ = '\\';  /* make it a double \ again */
+            nc = 2;
+          }
+          else
+            nc = -1;
+        }
+        else
+          nc = 1;
       }
       else
-        nc = 1;
+        nc = -1;
     }
+
 
     else if (*s == '@') {
       /* \@ : insert a unique id "_nnnnnn" */
-      if (dlen >= 7) {
-        unsigned long unique_id = src->id;
+      unsigned long unique_id;
 
+      s++;
+      if (*s == '@') {
+        /* pull id from stack */
+        if (id_stack_index <= 0) {
+          syntax_error(17);  /* id pull without matching push */
+          return 0;
+        }
+        else
+          unique_id = id_stack[id_stack_index-1];
+      }
+      else
+        unique_id = src->id;
+
+      nc = snprintf(d,dlen,"_%06lu",unique_id);
+      if (nc < dlen) {
+        switch (*s) {
+          case '!':
+            /* push id onto stack */
+            if (id_stack_index >= IDSTACKSIZE) {
+              syntax_error(16);  /* id stack overflow */
+              return 0;
+            }
+            else
+              id_stack[id_stack_index++] = unique_id;
+            s++;
+            break;
+          case '?':
+            /* push id below the top item on the stack */
+            if (id_stack_index >= IDSTACKSIZE) {
+              syntax_error(16);  /* id stack overflow */
+              return 0;
+            }
+            else if (id_stack_index <= 0) {
+              syntax_error(14);  /* insert on empty id stack */
+              return 0;
+            }
+            else {
+              id_stack[id_stack_index] = id_stack[id_stack_index-1];
+              id_stack[id_stack_index-1] = unique_id;
+              ++id_stack_index;
+            }
+            s++;
+            break;
+          case '@':
+            --id_stack_index;
+            s++;
+            break;
+        }
+      }
+      else
+        nc = -1;
+    }
+
+    else if (*s == '<') {
+      /* \<symbol> : insert absolute unsigned symbol value */
+      const char *fmt;
+      char *name;
+      symbol *sym;
+      taddr val;
+
+      if (*(++s) == '$') {
+        fmt = "%lX";
         s++;
-        if (*s == '!') {
-          /* push id onto stack */
-          if (id_stack_index >= IDSTACKSIZE)
-            syntax_error(16);  /* id stack overflow */
-          else
-            id_stack[id_stack_index++] = unique_id;
-          s++;              
+      }
+      else
+        fmt = "%lu";
+      if (name = parse_symbol(&s)) {
+        if ((sym = find_symbol(name)) && sym->type==EXPRESSION) {
+          if (eval_expr(sym->expr,&val,NULL,0))
+            nc = sprintf(d,fmt,(unsigned long)(uint32_t)val);
         }
-        else if (*s == '?') {
-          /* push id below the top item on the stack */
-          if (id_stack_index >= IDSTACKSIZE)
-            syntax_error(16);  /* id stack overflow */
-          else if (id_stack_index <= 0)
-            syntax_error(14);  /* insert on empty id stack */
-          else {
-            id_stack[id_stack_index] = id_stack[id_stack_index-1];
-            id_stack[id_stack_index-1] = unique_id;
-            ++id_stack_index;
-          }
-          s++;
+        myfree(name);
+        if (*s++!='>' || nc<0) {
+          syntax_error(19);  /* invalid numeric expansion */
+          return 0;
         }
-        else if (*s == '@') {
-          /* pull id from stack */
-          if (id_stack_index <= 0)
-            syntax_error(17);  /* id pull without matching push */
-          else
-            unique_id = id_stack[--id_stack_index];
-          s++;
-        }
-        nc = sprintf(d, "_%06lu", unique_id);
+      }
+      else {
+        syntax_error(10);  /* identifier expected */
+        return 0;
       }
     }
 
     else if (*s == '#') {
       /* \# : insert number of parameters */
-      if (dlen >= 2) {
-        nc = sprintf(d,"%d",src->num_params);
-        s++;
-      }
+      nc = sprintf(d,"%d",src->num_params);
+      s++;
     }
 
     else if (*s=='?' && isdigit((unsigned char)*(s+1))) {
       /* \?n : insert parameter n length */
-      if (dlen >= 3) {
-        nc = sprintf(d,"%d",*(s+1)=='0'?
+      nc = sprintf(d,"%d",*(s+1)=='0'?
 #if MAX_QUALIFIERS > 0
-                            src->qual_len[0]:
+                          src->qual_len[0]:
 #else
-                            0:
+                          0:
 #endif
-                            src->param_len[*(s+1)-'1']);
-        s += 2;
-      }
+                          src->param_len[*(s+1)-'1']);
+      s += 2;
     }
 
     else if (*s == '.') {
@@ -1993,11 +2121,13 @@ int expand_macro(source *src,char **line,char *d,int dlen)
         s++;
     }
 
-    if (nc >= 0)
+    if (nc >= dlen)
+      nc = -1;
+    else if (nc >= 0)
       *line = s;  /* update line pointer when expansion took place */
   }
 
-  return nc;  /* number of chars written to line buffer, -1: no expansion */
+  return nc;  /* number of chars written to line buffer, -1: out of space */
 }
 
 
@@ -2136,6 +2266,7 @@ int syntax_args(char *p)
     esc_sequences = 0;
     allmp = 1;
     dot_idchar = 1;
+    warn_unalloc_ini_dat = 1;
     return 1;
   }
   else if (!strcmp(p,"-phxass")) {

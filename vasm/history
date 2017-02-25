@@ -10,6 +10,8 @@ o madmac-syntax: Fixed .long directive (which only aligned to even bytes).
 o oldstyle-syntax: New options -i (ignore everything in the operand after a
   blank), -noc (no C-style constant prefixes) and -noi (no intel-style
   constant suffixes).
+o output-hunk: -kick1hunks must not forbid base relative relocs and
+  references. It was supported by some 1.3 linkers (blink for example).
 
 - 1.7h (14.02.17)
 o Implemented a dynamic line buffer. No limitations on line lengths anymore.

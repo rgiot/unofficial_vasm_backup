@@ -24,6 +24,7 @@ static struct namelen *enddir_list;
 static size_t enddir_minlen;
 static struct namelen *reptdir_list;
 static int rept_cnt = -1;
+static char * rept_name = NULL;
 static char *rept_start;
 static section *cur_struct;
 static section *struct_prevsect;
@@ -443,14 +444,18 @@ int real_line(void)
 }
 
 
-void new_repeat(int rcnt,struct namelen *reptlist,struct namelen *endrlist)
+void new_repeat(int rcnt,struct namelen *reptlist,struct namelen *endrlist,char *reptname)
 {
   if (cur_macro==NULL && cur_src!=NULL && enddir_list==NULL) {
     enddir_list = endrlist;
     enddir_minlen = dirlist_minlen(endrlist);
     reptdir_list = reptlist;
     rept_cnt = rcnt;
+    rept_name = reptname;
     rept_start = cur_src->srcptr;
+
+    // TODO Check that the label reptname does not already exists
+    // TODO free the memory used for the label reptname at the end of the repetition ?
   }
   else
     ierror(0);
@@ -542,6 +547,7 @@ macro *new_macro(char *name,struct namelen *endmlist,char *args)
     enddir_minlen = dirlist_minlen(endmlist);
     rept_cnt = -1;
     rept_start = NULL;
+    rept_name = NULL;
 
     if (args) {
       /* named arguments have been given */
@@ -777,6 +783,8 @@ static void start_repeat(char *rept_end)
     sprintf(buf,"REPEAT:%s:line %d",cur_src->name,cur_src->line);
     src = new_source(mystrdup(buf),rept_start,rept_end-rept_start);
     src->repeat = (unsigned long)rept_cnt;
+    src->reptname = rept_name;
+    if (src->reptname) set_internal_abs(src->reptname,0);
 #ifdef REPTNSYM
     src->reptn = 0;
     set_internal_abs(REPTNSYM,0);
@@ -917,8 +925,10 @@ char *read_next_line(void)
       if (--cur_src->repeat > 0) {
         cur_src->srcptr = cur_src->text;  /* back to start */
         cur_src->line = 0;
+	++ cur_src->reptn;
+        if (cur_src->reptname) set_internal_abs(cur_src->reptname,cur_src->reptn);
 #ifdef REPTNSYM
-        set_internal_abs(REPTNSYM,++cur_src->reptn);
+        set_internal_abs(REPTNSYM,cur_src->reptn);
 #endif
       }
       else {
@@ -937,6 +947,7 @@ char *read_next_line(void)
           carg->expr = cur_src->cargexp;  /* restore parent CARG */
         }
 #endif
+        if (cur_src->reptname) set_internal_abs(cur_src->reptname,cur_src->reptn);  /* restore parent REPTN */
 #ifdef REPTNSYM
         set_internal_abs(REPTNSYM,cur_src->reptn);  /* restore parent REPTN */
 #endif

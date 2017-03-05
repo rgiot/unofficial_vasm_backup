@@ -716,11 +716,21 @@ static void handle_incbin(char *s)
 static void handle_rept(char *s)
 {
   taddr cnt = parse_constexpr(&s);
+  char *name = NULL;
 
+  // Check if we provide a name to the counter
+  s = skip(s);
+  if (*s == ',') {
+    s = skip(s+1);
+    name = parse_name(&s);
+    s = skip(s);
+  }
+  
   eol(s);
   new_repeat((int)cnt,
              dotdirs?drept_dirlist:rept_dirlist,
-             dotdirs?dendr_dirlist:endr_dirlist);
+             dotdirs?dendr_dirlist:endr_dirlist,
+	     name);
 }
 
 

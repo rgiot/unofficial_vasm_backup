@@ -95,9 +95,8 @@ struct source {
 #ifdef CARGSYM
   expr *cargexp;
 #endif
-#ifdef REPTNSYM
-  long reptn;
-#endif
+  long reptn;     // In case of a repetition, value of the counter
+  char *reptname; // In case of a repetition, name of the counter (optionnaly set) 
 };
 
 /* section flags */

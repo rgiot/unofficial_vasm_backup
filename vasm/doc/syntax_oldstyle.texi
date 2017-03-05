@@ -388,12 +388,13 @@ CPU- and output-module allow it):
 @item phase <expression>
       Equivalent to @code{rorg <expression>}.
 
-@item repeat <expression>
+@item repeat <expression>[,COUNTERNAME]
       Equivalent to @code{rept <expression>}.
 
-@item rept <expression>
+@item rept <expression>[,COUNTERNAME]
       Repeats the assembly of the block between @code{rept} and @code{endr}
       <expression> number of times. <expression> has to be positive.
+      If COUNTERNAME is specified, the counter value will be stored within this variable.
 
 @item reserve <exp>
       Equivalent to @code{blk <exp>,0}.

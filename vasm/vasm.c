@@ -975,10 +975,9 @@ source *new_source(char *filename,char *text,size_t size)
 #ifdef CARGSYM
   s->cargexp = NULL;
 #endif
-#ifdef REPTNSYM
   /* -1 outside of a repetition block */
   s->reptn = cur_src ? cur_src->reptn : -1;
-#endif
+  s->reptname = NULL;
   return s;
 }
 

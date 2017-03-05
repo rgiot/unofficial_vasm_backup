@@ -283,9 +283,13 @@ was included or called.
         instance.
 
 @item long reptn;
-        (If @code{REPTNSYM} was defined.) Current value of the repetition
+       Current value of the repetition
         counter symbol in this source instance. So it can be restored when
         reentering this instance.
+
+@item char *reptname;
+	Name of the counter for the current repetition. Is only specified
+	when the source concerns a repetition and has been set by the appropriate directive.
 @end table
 
 @subsection Sections

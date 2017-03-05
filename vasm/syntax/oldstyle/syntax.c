@@ -12,7 +12,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm oldstyle syntax module 0.13 (c) 2002-2017 Frank Wille";
+char *syntax_copyright="vasm oldstyle syntax module 0.13a (c) 2002-2017 Frank Wille";
 hashtable *dirhash;
 
 static char textname[]=".text",textattr[]="acrx";
@@ -1128,6 +1128,61 @@ static char *parse_label_or_pc(char **start)
 }
 
 
+#ifdef STATEMENT_DELIMITER
+static char *read_next_statement(void)
+{
+  static char *s = NULL;
+  char *line,c;
+
+  if (s == NULL) {
+    char *lab;
+
+    s = line = read_next_line();
+    if (s == NULL)
+      return NULL;  /* no more lines in source */
+
+    /* skip label field and possible statement delimiters therein */
+    if (lab = parse_label_or_pc(&s))
+      myfree(lab);
+  }
+  else {
+    /* make the new statement start with a blank - there is no label field */
+    *s = ' ';
+    line = s++;
+  }
+
+  /* find next statement delimiter in line buffer */
+  for (;;) {
+#ifdef VASM_CPU_Z80
+    unsigned char lastuc;
+#endif
+
+    c = *s;
+#ifdef VASM_CPU_Z80
+    /* For the Z80 ignore ' behind a letter, as it may be a register */
+    lastuc = toupper((unsigned char)*(s-1));
+    if ((c=='\'' && (lastuc<'A' || lastuc>'Z')) || c=='\"') {
+#else
+    if (c=='\'' || c=='\"') {
+#endif
+      s = skip_string(s,c,NULL);
+    }
+    else if (c == STATEMENT_DELIMITER) {
+      *s = '\0';  /* terminate the statement here temporarily */
+      break;
+    }
+    else if (c=='\0' || c==commentchar) {
+      s = NULL;  /* ignore delimiters in rest of line */
+      break;
+    }
+    else
+      s++;
+  }
+  return line;
+}
+#endif
+
+
 void parse(void)
 {
   char *s,*line,*inst,*labname;
@@ -1138,7 +1193,11 @@ void parse(void)
   int ext_cnt,op_cnt,inst_len;
   instruction *ip;
 
+#ifdef STATEMENT_DELIMITER
+  while (line = read_next_statement()) {
+#else
   while (line = read_next_line()) {
+#endif
     if (parse_end)
       continue;
 
@@ -1218,8 +1277,6 @@ void parse(void)
         /* it's just a label */
         label = new_labsym(0,labname);
         add_atom(0,new_label_atom(label));
-        if (*s == ':')	/* optionally terminated by a colon */
-          s = skip(s+1);
       }
 
       if (!is_local_label(labname) && autoexport)

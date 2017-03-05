@@ -996,5 +996,6 @@ This module has the following error messages:
 @item 2062: can't use B%d register as index
 @item 2063: register list on both sides
 @item 2064: "%s" directive was replaced by an instruction with the same name
+@item 2065: Addr.reg. operand at level #0 causes F-line exception
 
 @end itemize

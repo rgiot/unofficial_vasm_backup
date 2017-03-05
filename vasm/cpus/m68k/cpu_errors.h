@@ -63,3 +63,4 @@
   "can't use B%d register as index",ERROR,
   "register list on both sides",ERROR,
   "\"%s\" directive was replaced by an instruction with the same name",NOLINE|WARNING,
+  "Addr.reg. operand at level #0 causes F-line exception",WARNING,

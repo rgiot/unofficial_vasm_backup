@@ -61,7 +61,11 @@ operands are separated by comma (@code{,}).
 Make sure that you don't define a label on the same line as a
 directive for conditional assembly (if, else, endif)! This is not supported.
 
-Comments are introduced by the comment character @code{;}.
+Some CPU backends may supported multiple statements (directives or
+mnemonics) per line, separated by a special character (e.g. @{:} for Z80).
+
+Comments are introduced by the comment character @code{;}, or the first
+blank following the operand field when option @option{-i} was given.
 The rest of the line will be ignored.
 
 Example:

@@ -3692,6 +3692,12 @@ dontswap:
         cpu_error(53,*(ip->qualifiers[0]));
     }
   }
+  else if (oc==0xf000 && !(mnemo->ext.available & mfloat)
+           && (mnemo->ext.opcode[1] & 0xe000) == 0x8000) {
+    if (final && ip->op[2]!=NULL && ip->op[2]->base[0]==NULL
+        && ip->op[2]->extval[0]==0 && ip->op[3]!=NULL)
+      cpu_error(64);  /* An operand at level #0 causes F-line Exception */
+  }
 
   if (opt_immaddr && abs && ext=='l' && ip->op[0]!=NULL &&
       ip->op[0]->mode==MODE_Extended && ip->op[0]->reg==REG_Immediate &&

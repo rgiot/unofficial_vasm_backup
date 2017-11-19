@@ -1,5 +1,5 @@
 /* syntax.c  syntax module for vasm */
-/* (c) in 2002-2016 by Volker Barthelmann and Frank Wille */
+/* (c) in 2002-2017 by Volker Barthelmann and Frank Wille */
 
 #include "vasm.h"
 #include "stabs.h"
@@ -13,7 +13,7 @@
    be provided by the main module.
 */
 
-char *syntax_copyright="vasm std syntax module 5.0c (c) 2002-2016 Volker Barthelmann";
+char *syntax_copyright="vasm std syntax module 5.1 (c) 2002-2017 Volker Barthelmann";
 hashtable *dirhash;
 
 static char textname[]=".text",textattr[]="acrx";
@@ -686,9 +686,35 @@ static void handle_rept(char *s)
   taddr cnt = parse_constexpr(&s);
 
   eol(s);
-  new_repeat((int)cnt,
+  new_repeat((int)cnt,NULL,NULL,
              nodotneeded?rept_dirlist:drept_dirlist,
              nodotneeded?endr_dirlist:dendr_dirlist);
+}
+
+static void do_irp(int type,char *s)
+{
+  char *name;
+
+  if(!(name=parse_identifier(&s))){
+    syntax_error(10);  /* identifier expected */
+    return;
+  }
+  s=skip(s);
+  if (*s==',')
+    s=skip(s+1);
+  new_repeat(type,name,mystrdup(s),
+             nodotneeded?rept_dirlist:drept_dirlist,
+             nodotneeded?endr_dirlist:dendr_dirlist);
+}
+
+static void handle_irp(char *s)
+{
+  do_irp(REPT_IRP,s);
+}
+
+static void handle_irpc(char *s)
+{
+  do_irp(REPT_IRPC,s);
 }
 
 static void handle_endr(char *s)
@@ -996,6 +1022,8 @@ struct {
   "include",handle_include,
   "incbin",handle_incbin,
   "rept",handle_rept,
+  "irp",handle_irp,
+  "irpc",handle_irpc,
   "endr",handle_endr,
   "macro",handle_macro,
   "endm",handle_endm,
@@ -1346,19 +1374,20 @@ char *get_local_label(char **start)
 
   if (*s == '.') {
     s++;
-    while (isdigit((unsigned char)*s) || *s=='_')  /* '_' needed for '\@' */
+    while (isdigit((unsigned char)*s) || *s=='_')  /* '_' needed for ".\@" */
       s++;
     if (s > (*start+1)) {
       name = make_local_label(NULL,0,*start,s-*start);
       *start = skip(s);
     }
   }
-  else if (isalnum((unsigned char)*s) || *s=='_') {
+  else if (isdigit((unsigned char)*s) || *s=='_') {  /* '_' needed for "\@$" */
     s++;
-    while (ISIDCHAR(*s))
+    while (isdigit((unsigned char)*s))
       s++;
-    if (s>(*start+1) && *(s-1)=='$') {
-      name = make_local_label(NULL,0,*start,(s-1)-*start);
+    if (*s=='$' && isdigit((unsigned char)*(s-1))) {
+      s++;
+      name = make_local_label(NULL,0,*start,s-*start);
       *start = skip(s);
     }
   }

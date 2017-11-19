@@ -7,7 +7,7 @@
 #include "vasm.h"
 #include "stabs.h"
 
-#define _VER "vasm 1.7i"
+#define _VER "vasm 1.8b"
 char *copyright = _VER " (c) in 2002-2017 Volker Barthelmann";
 #ifdef AMIGA
 static const char *_ver = "$VER: " _VER " " __AMIGADATE__ "\r\n";
@@ -22,12 +22,13 @@ static const char *_ver = "$VER: " _VER " " __AMIGADATE__ "\r\n";
    optimized at the same time. After that the resolver enters a safe mode,
    where only a single instruction per pass is changed. */
 #define MAXPASSES 1000
-#define FASTOPTPHASE 50
+#define FASTOPTPHASE 200
 
 source *cur_src=NULL;
 char *filename,*debug_filename;
 section *current_section;
 char *inname,*outname,*listname;
+taddr inst_alignment=INST_ALIGN;
 int secname_attr;
 int unnamed_sections;
 int ignore_multinc;
@@ -53,7 +54,7 @@ static int listtitlecnt;
 
 static FILE *outfile=NULL;
 
-static int depend;
+static int depend,depend_all;
 #define DEPEND_LIST     1
 #define DEPEND_MAKE     2
 struct deplist {
@@ -496,7 +497,7 @@ static int init_output(char *fmt)
     return init_output_aout(&output_copyright,&write_object,&output_args);
   if(!strcmp(fmt,"hunkexe")){
     exec_out=1;  /* executable format */
-    return init_output_hunkexe(&output_copyright,&write_object,&output_args);
+    return init_output_hunk(&output_copyright,&write_object,&output_args);
   }
   if(!strcmp(fmt,"tos")){
     exec_out=1;  /* executable format */
@@ -682,18 +683,20 @@ int main(int argc,char **argv)
         continue;
       }
     }
-    if(!strncmp("-depend=",argv[i],8)){
-      if (!strcmp("list",&argv[i][8])) {
+    if(!strncmp("-depend=",argv[i],8) || !strncmp("-dependall=",argv[i],11)){
+      depend_all=argv[i][7]!='=';
+      if(!strcmp("list",&argv[i][depend_all?11:8])){
         depend=DEPEND_LIST;
         continue;
       }
-      else if (!strcmp("make",&argv[i][8])) {
+      else if(!strcmp("make",&argv[i][depend_all?11:8])){
         depend=DEPEND_MAKE;
         continue;
       }
     }
     if(!strcmp("-unnamed-sections",argv[i])){
       unnamed_sections=1;
+
       continue;
     }
     if(!strcmp("-ignore-mult-inc",argv[i])){
@@ -736,6 +739,10 @@ int main(int argc,char **argv)
     }
     else if(!strcmp("-chklabels",argv[i])){
       chklabels=1;
+      continue;
+    }
+    else if(!strcmp("-noialign",argv[i])) {
+      inst_alignment=1;
       continue;
     }
     if(cpu_args(argv[i]))
@@ -829,11 +836,12 @@ FILE *locate_file(char *filename,char *mode)
   struct include_path *ipath;
   FILE *f;
 
-  if (*filename=='.' || *filename=='/' || *filename=='\\' ||
-      strchr(filename,':')!=NULL) {
+  if (*filename=='.' || abs_path(filename)) {
     /* file name is absolute, then don't use any include paths */
+    /* @@@ FIXME: '.' is currently stripped by convert_path() */
     if (f = fopen(filename,mode)) {
-      add_depend(filename);
+      if (depend_all)
+        add_depend(pathbuf);
       return f;
     }
   }
@@ -844,7 +852,8 @@ FILE *locate_file(char *filename,char *mode)
         strcpy(pathbuf,ipath->path);
         strcat(pathbuf,filename);
         if (f = fopen(pathbuf,mode)) {
-          add_depend(pathbuf);
+          if (depend_all || !abs_path(pathbuf))
+            add_depend(pathbuf);
           return f;
         }
       }
@@ -963,6 +972,7 @@ source *new_source(char *filename,char *text,size_t size)
   s->size = size;
   s->macro = NULL;
   s->repeat = 1;        /* read just once */
+  s->irpname = NULL;
   s->cond_level = clev; /* remember level of conditional nesting */
   s->num_params = -1;   /* not a macro, no parameters */
   s->param[0] = emptystr;
